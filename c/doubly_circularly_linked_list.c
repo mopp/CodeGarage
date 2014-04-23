@@ -2,8 +2,7 @@
  * @file doubly_circularly_linked_list.c
  * @brief This list is DoublyCircularlyLinkedList.
  *      prev                            next
- *          first->X0->X1->last->X0->...
- *          last<-X1<-X0<-last<-X1<-...
+ *          node(X0)<->X1<->node(X0)->X1->...
  * @author mopp
  * @version 0.1
  * @date 2014-04-23
@@ -110,7 +109,7 @@ List_node* insert_next(List* l, List_node* target, void* data) {
 
     /* set new node. */
     if (target == l->node->prev) {
-        l->node->prev = new;
+        /* l->node->prev = new; */
     }
 
     ++(l->size);
@@ -137,9 +136,8 @@ List_node* insert_prev(List* l, List_node* target, void* data) {
 
     /* set new node. */
     if (target == l->node) {
-        l->node = new;
+        /* l->node = new; */
     }
-
     ++(l->size);
 
     return new;
@@ -168,7 +166,7 @@ List* insert_first(List* l, void* data) {
     if (l->node == NULL) {
         insert_first_node(l, data);
     } else {
-        insert_prev(l, l->node, data);
+        l->node = insert_prev(l, l->node, data);
     }
 
     return l;
@@ -183,7 +181,7 @@ List* insert_last(List* l, void* data) {
     if (l->node == NULL) {
         insert_first_node(l, data);
     } else {
-        insert_next(l, l->node->prev, data);
+        l->node->prev = insert_next(l, l->node->prev, data);
     }
 
     return l;
@@ -311,6 +309,7 @@ static inline bool echo(void* d) {
     return true;
 }
 
+
 static bool test_loop_int_rev(void* d) {
     static int cnt = 0;
 
@@ -380,17 +379,13 @@ int main(void) {
 
     test_destract(&l);
 
-    int num = 100;
-    insert_first(&l, &num);
-    assert(*(int*)(l.node->data) == num);
-    num++;
-    insert_next(&l, l.node, &num);
-    assert(*(int*)l.node->next->data == num);
-    num++;
-
-    insert_prev(&l, l.node, &num);
-    assert(*(int*)l.node->data == num);
-    num++;
+    int a = 10, b = 20, c = 50;
+    insert_first(&l, &a);
+    assert(*(int*)(l.node->data) == a);
+    insert_next(&l, l.node, &b);
+    assert(*(int*)l.node->next->data == b);
+    insert_prev(&l, l.node, &c);
+    assert(*(int*)l.node->prev->data == c);
 
     printf("last -> ");
     list_for_each(&l, echo, false);

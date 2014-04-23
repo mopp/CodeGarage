@@ -31,7 +31,7 @@ typedef void (*release_func)(void*);
 typedef bool (*comp_func)(void*, void*);
 /*
  * for each function for list node.
- * if return value is false, loop is abort
+ * if return value is true, loop is abort
  */
 typedef bool (*for_each_func)(void*);
 
@@ -107,11 +107,6 @@ List_node* insert_next(List* l, List_node* target, void* data) {
     new->prev = target;
     new->prev->next = new;
 
-    /* set new node. */
-    if (target == l->node->prev) {
-        /* l->node->prev = new; */
-    }
-
     ++(l->size);
 
     return new;
@@ -134,10 +129,6 @@ List_node* insert_prev(List* l, List_node* target, void* data) {
     new->next = target;
     target->prev = new;
 
-    /* set new node. */
-    if (target == l->node) {
-        /* l->node = new; */
-    }
     ++(l->size);
 
     return new;
@@ -192,8 +183,16 @@ List* insert_last(List* l, void* data) {
 void delete_node(List* l, List_node* target) {
     assert(target != NULL);
 
-    target->next->prev = target->prev;
-    target->prev->next = target->next;
+    if (l->size == 1) {
+        l->node = NULL;
+    } else if (target == l->node) {
+        l->node->prev->next = target->next;
+        target->next->prev = l->node->prev;
+        l->node = target->next;
+    } else {
+        target->next->prev = target->prev;
+        target->prev->next = target->next;
+    }
 
     if (l->free != NULL) {
         l->free(target);
@@ -216,14 +215,16 @@ void destruct_list(List* l) {
     release_func f = (l->free != NULL) ? l->free : free;
 
     List_node* n = l->node;
-    List_node* t;
-    do {
-        t = n->next;
-        f(n->data);
-        free(n);
-        n = t;
-    } while (n != l->node->prev);
+    List_node* t = l->node;
 
+    if (l->size != 1) {
+        do {
+            t = n->next;
+            f(n->data);
+            free(n);
+            n = t;
+        } while (n != l->node->prev);
+    }
     f(t->data);
     free(t);
 
@@ -232,60 +233,66 @@ void destruct_list(List* l) {
 }
 
 
-/* search node witch has argument data. */
-List_node* search_node(List* l, void* data, comp_func f) {
-    if (l->node == NULL) {
-        return NULL;
-    }
-
-    // FIXME
-    for (List_node* n = l->node; n != l->node; n = n->prev) {
-        if (f(n->data, data) == true) {
-            return n;
-        }
-    }
-
-    return NULL;
-}
-
-
 /* for each loop. */
-List* list_for_each(List* const l, for_each_func const f, bool const is_reverse) {
+List_node* list_for_each(List* const l, for_each_func const f, bool const is_reverse) {
     assert(f != NULL);
 
     if (l->node == NULL) {
         assert(0);
-        return l;
+        return NULL;
     }
 
     if (l->node == l->node->next) {
         /* when list has only one node. */
         f(l->node->data);
-        return l;
+        return l->node;
     }
-
-    List_node* n;
 
     if (is_reverse == false) {
-        if (false == f(l->node->data)) {
-            return l;
+        if (true == f(l->node->data)) {
+            return l->node;
         }
     }
 
-    n = (is_reverse == true) ? l->node->prev : l->node->next;
+    List_node* n = (true == is_reverse) ? l->node->prev : l->node->next;
     do {
-        if (false == f(n->data)) {
+        if (true == f(n->data)) {
             break;
         }
-        n = (is_reverse == true) ? n->prev : n->next;
+        n = (true == is_reverse) ? n->prev : n->next;
     } while (n != l->node);
 
-    if (is_reverse == true) {
+    if (true == is_reverse) {
         f(l->node->data);
     }
 
-    return l;
+    return l->node;
 }
+
+static void* search_target;
+static List* search_list;
+static bool search_loop(void* data) {
+    return (0 == memcmp(search_target, data, search_list->data_type_size));
+}
+
+
+/* search node witch has argument data. */
+List_node* search_node(List* l, void* data) {
+    if (l->node == NULL) {
+        return NULL;
+    }
+
+    search_target = data;
+    search_list = l;
+
+    List_node* n = list_for_each(l, search_loop, false);
+
+    search_target = NULL;
+    search_list = NULL;
+
+    return (n != NULL) ? n : NULL;
+}
+
 
 
 /* ---------------------------------------------------------------------------------------------------- */
@@ -304,9 +311,18 @@ static void print_list(List const* const l) {
 }
 
 
+static void print_node(List_node const* const n) {
+    printf("Print Node---------------------\n");
+    printf("data        : %d\n", *(int*)n->data);
+    printf("next        : %p\n", n->next);
+    printf("prev        : %p\n", n->prev);
+    printf("-------------------------------\n");
+}
+
+
 static inline bool echo(void* d) {
     printf("%d -> ", *(int*)d);
-    return true;
+    return false;
 }
 
 
@@ -316,7 +332,7 @@ static bool test_loop_int_rev(void* d) {
     echo(d);
     assert(*(int*)d == test_array[cnt++ % check_size]);
 
-    return true;
+    return false;
 }
 
 
@@ -326,7 +342,7 @@ static bool test_loop_int(void* d) {
     echo(d);
     assert(*(int*)d == test_array[check_size - cnt++ % check_size - 1]);
 
-    return true;
+    return false;
 }
 
 
@@ -379,17 +395,32 @@ int main(void) {
 
     test_destract(&l);
 
+    printf("Insert first/next/prev---------\n");
     int a = 10, b = 20, c = 50;
     insert_first(&l, &a);
+    print_node(l.node);
     assert(*(int*)(l.node->data) == a);
     insert_next(&l, l.node, &b);
+    print_node(l.node->next);
     assert(*(int*)l.node->next->data == b);
     insert_prev(&l, l.node, &c);
+    print_node(l.node->prev);
     assert(*(int*)l.node->prev->data == c);
 
-    printf("last -> ");
+    printf("first -> ");
     list_for_each(&l, echo, false);
-    puts("first");
+    puts("last");
+    printf("-------------------------------\n");
+
+    printf("Delete Node--------------------\n");
+    delete_node(&l, l.node);
+    assert(*(int*)l.node->data == b);
+    delete_node(&l, l.node);
+    assert(*(int*)l.node->data == c);
+    delete_node(&l, l.node);
+    assert(l.size == 0 && l.node == NULL);
+    print_list(&l);
+    printf("-------------------------------\n");
 
     printf("\nAll Test Passed !\n");
 

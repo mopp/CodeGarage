@@ -190,7 +190,7 @@ void destruct_list(List* l) {
 }
 
 
-size_t get_list_size(List const * l) {
+size_t get_list_size(List const* l) {
     return l->size;
 }
 
@@ -231,6 +231,7 @@ List_node* list_for_each(List* const l, for_each_func const f, bool const is_rev
     return l->node;
 }
 
+
 static void* search_target;
 static List* search_list;
 static bool search_loop(void* data) {
@@ -264,6 +265,8 @@ List_node* search_list_node(List* l, void* data) {
 
 #define MAX_SIZE 10
 static int test_array[MAX_SIZE] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+static char const* test_words[] = {"Apple", "Orange", "Banana", "Lemon", "Lime", "Strawberry"};
+#define TEST_WORDS_SIZE (sizeof(test_words) / sizeof(test_words[0]))
 static int const check_size = MAX_SIZE;
 
 static void print_list(List const* const l) {
@@ -311,12 +314,27 @@ static bool test_loop_int(void* d) {
 }
 
 
+static bool test_loop_str(void* d) {
+    printf("%s -> ", *(char**)d);
+    return false;
+}
+
+
 static void test_destract(List* l) {
     printf("Destruct List------------------\n");
     destruct_list(l);
     assert(get_list_size(l) == 0 && l->node == NULL);
     printf("Delete all node in List\n");
     printf("-------------------------------\n");
+}
+
+
+static void str_release_func(void* d) {
+    static int cnt = 0;
+    assert(strcmp(test_words[cnt++], *(char**)d) == 0);
+
+    free(*(char**)d);
+    free(d);
 }
 
 
@@ -366,9 +384,11 @@ int main(void) {
     insert_list_node_first(&l, &a);
     print_node(l.node);
     assert(*(int*)(l.node->data) == a);
+
     insert_list_node_next(&l, l.node, &b);
     print_node(l.node->next);
     assert(*(int*)l.node->next->data == b);
+
     insert_list_node_prev(&l, l.node, &c);
     print_node(l.node->prev);
     assert(*(int*)l.node->prev->data == c);
@@ -381,12 +401,35 @@ int main(void) {
     printf("Delete Node--------------------\n");
     delete_list_node(&l, l.node);
     assert(*(int*)l.node->data == b);
+
     delete_list_node(&l, l.node);
     assert(*(int*)l.node->data == c);
+
     delete_list_node(&l, l.node);
     assert(get_list_size(&l) == 0 && l.node == NULL);
+
     print_list(&l);
     printf("-------------------------------\n");
+
+    test_destract(&l);
+
+    printf("Release func-------------------\n");
+    init_list(&l, sizeof(char*), str_release_func);
+    for (int i = 0; i < TEST_WORDS_SIZE; i++) {
+        char* c = (char*)malloc(strlen(test_words[i]));
+        strcpy(c, test_words[i]);
+        insert_list_node_last(&l, &c);
+    }
+
+    printf("first -> ");
+    list_for_each(&l, test_loop_str, false);
+    puts("last");
+    assert(get_list_size(&l) == TEST_WORDS_SIZE);
+
+    test_destract(&l);
+
+    printf("-------------------------------\n");
+
 
     printf("\nAll Test Passed !\n");
 

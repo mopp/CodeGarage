@@ -1,3 +1,10 @@
+/**
+ * @file memory_dump.c
+ * @brief formated memory dump function.
+ * @author mopp
+ * @version 0.1
+ * @date 2014-04-24
+ */
 #include <stdint.h>
 #include <stdio.h>
 

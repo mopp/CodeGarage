@@ -53,17 +53,23 @@ struct list {
 };
 typedef struct list List;
 
-// extern List* init_list(List*, size_t, release_func);
-// extern List_node* get_new_list_node(List*, void*);
-// extern List_node* insert_list_node_next(List*, List_node*, void*);
-// extern List_node* insert_list_node_prev(List*, List_node*, void*);
-// extern List* insert_list_node_first(List*, void*);
-// extern List* insert_list_node_last(List*, void*);
-// extern void delete_list_node(List*, List_node*);
-// extern void destruct_list(List*);
-// extern size_t get_list_size(List const*);
-// extern List_node* list_for_each(List* const, for_each_func const, bool const);
-// extern List_node* search_list_node(List*, void*);
+
+extern List* list_init(List*, size_t, release_func);
+extern List_node* list_get_new_node(List*, void*);
+extern List_node* list_insert_node_next(List*, List_node*, List_node*);
+extern List_node* list_insert_data_next(List*, List_node*, void*);
+extern List_node* list_insert_node_prev(List*, List_node*, List_node*);
+extern List_node* list_insert_data_prev(List*, List_node*, void*);
+extern List* list_insert_node_first(List*, List_node*);
+extern List* list_insert_data_first(List*, void*);
+extern List* list_insert_node_last(List*, List_node*);
+extern List* list_insert_data_last(List*, void*);
+extern List_node* remove_list_node(List*, List_node* target);
+extern void delete_list_node(List*, List_node* target);
+extern void destruct_list(List*);
+extern size_t get_list_size(List const*);
+extern List_node* list_for_each(List* const, for_each_func const, bool const);
+extern List_node* list_search_node(List*, void*);
 
 
 #endif

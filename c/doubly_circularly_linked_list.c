@@ -16,8 +16,14 @@
 #include "doubly_circularly_linked_list.h"
 
 
-/* inisialize list */
-List* init_list(List* l, size_t size, release_func f) {
+/**
+ * @brief initialize list.
+ * @param l pointer to list.
+ * @param size size of stored data type in list.
+ * @param f pointer to function for release data in list.
+ * @return pointer to list.
+ */
+List* list_init(List* l, size_t size, release_func f) {
     l->node = NULL;
     l->free = f;
     l->size = 0;
@@ -27,8 +33,13 @@ List* init_list(List* l, size_t size, release_func f) {
 }
 
 
-/* allocate new node and set data in it. */
-List_node* get_new_list_node(List* l, void* data) {
+/**
+ * @brief allocate new node and set data in it.
+ * @param l pointer to list.
+ * @param data pointer to set data into new node.
+ * @return pointer to new node.
+ */
+List_node* list_get_new_node(List* l, void* data) {
     List_node* n = (List_node*)malloc(sizeof(List_node));
     if (n == NULL) {
         return NULL;
@@ -47,12 +58,15 @@ List_node* get_new_list_node(List* l, void* data) {
 }
 
 
-/*
- * add new node into next of second argument node.
- * after execute, list is "... -> target -> new_node -> ...".
- * @return pointer to add node.
+/**
+ * @brief add new node into next of second argument node.
+ *        after execute, list became "... -> target -> new -> ...".
+ * @param l pointer to list.
+ * @param target pointer to base list.
+ * @param new pointer to added node.
+ * @return pointer to added node(third argument).
  */
-List_node* insert_list_node_next(List* l, List_node* target, List_node* new) {
+List_node* list_insert_node_next(List* l, List_node* target, List_node* new) {
     assert(l != NULL && target != NULL);
 
     new->next = target->next;
@@ -67,25 +81,31 @@ List_node* insert_list_node_next(List* l, List_node* target, List_node* new) {
 }
 
 
-/*
- * add new data into next of argument node.
- * And allocate new node for data of argument.
- * after execute, list is "... -> target -> new_node -> ...".
- * @return pointer to new node.
+/**
+ * @brief add new data into next of argument node.
+ *        And allocate new node for data of argument.
+ *        after execute, list is "... -> target -> new(has data) -> ...".
+ * @param l pointer to list.
+ * @param target pointer to base list.
+ * @param data pointer to added data.
+ * @return pointer to allocated node.
  */
-List_node* insert_list_data_next(List* l, List_node* target, void* data) {
+List_node* list_insert_data_next(List* l, List_node* target, void* data) {
     assert(l != NULL && target != NULL);
 
-    return insert_list_node_next(l, target, get_new_list_node(l, data));
+    return list_insert_node_next(l, target, list_get_new_node(l, data));
 }
 
 
-/*
- * add new node into prev of argument node.
- * after execute, list is "... -> new_node -> target -> ...".
- * @return pointer to new node.
+/**
+ * @brief add new node into previous of argument node.
+ *        after execute, list is "... -> new -> target -> ...".
+ * @param l pointer to list.
+ * @param target pointer to base node.
+ * @param new pointer to added node.
+ * @return pointer to added node(third argument).
  */
-List_node* insert_list_node_prev(List* l, List_node* target, List_node* new) {
+List_node* list_insert_node_prev(List* l, List_node* target, List_node* new) {
     assert(l != NULL && target != NULL);
 
     new->prev = target->prev;
@@ -100,20 +120,28 @@ List_node* insert_list_node_prev(List* l, List_node* target, List_node* new) {
 }
 
 
-/*
- * add new data into prev of argument node.
- * after execute, list is "... -> new_node -> target -> ...".
- * @return pointer to new node.
+/**
+ * @brief add new data into prev of argument node.
+ *        And allocate new node for data of argument.
+ *        after execute, list is "... -> new(has data) -> target -> ...".
+ * @param l pointer to list.
+ * @param target pointer to base node.
+ * @param data pointer to set data into new node.
+ * @return pointer to allocated node.
  */
-List_node* insert_list_data_prev(List* l, List_node* target, void* data) {
+List_node* list_insert_data_prev(List* l, List_node* target, void* data) {
     assert(l != NULL && target != NULL);
 
-    return insert_list_node_prev(l, target, get_new_list_node(l, data));
+    return list_insert_node_prev(l, target, list_get_new_node(l, data));
 }
 
 
-/* insert node when list has NOT any node. */
-static inline void insert_list_node_first_node(List* l, List_node* new) {
+/**
+ * @brief insert node when list has NOT any node.
+ * @param l pointer to list.
+ * @param new pointer to added node.
+ */
+static inline void list_insert_first_node(List* l, List_node* new) {
     assert(l->node == NULL);
 
     /* set pointer to self. */
@@ -126,62 +154,83 @@ static inline void insert_list_node_first_node(List* l, List_node* new) {
 }
 
 
-/*
- * add new node before first node in list
+/**
+ * @brief add new node at first in argument list.
+ * @param l pointer to list.
+ * @param new pointer to added node.
  * @return pointer to list.
  */
-List* insert_list_node_first(List* l, List_node* new) {
+List* list_insert_node_first(List* l, List_node* new) {
     if (l->node == NULL) {
-        insert_list_node_first_node(l, new);
+        list_insert_first_node(l, new);
     } else {
-        l->node = insert_list_node_prev(l, l->node, new);
+        l->node = list_insert_node_prev(l, l->node, new);
     }
 
     return l;
 }
 
 
-/*
- * add new data before first node in list
+/**
+ * @brief add new data into first position in argument list.
+ * @param l pointer to list.
+ * @param data pointer to added data.
  * @return pointer to list.
  */
-List* insert_list_data_first(List* l, void* data) {
-    return insert_list_node_first(l, get_new_list_node(l, data));
+List* list_insert_data_first(List* l, void* data) {
+    return list_insert_node_first(l, list_get_new_node(l, data));
 }
 
 
 
-/*
- * add new node after last node in list
+/**
+ * @brief add new node into last positio in argument list.
+ * @param l pointer to list.
+ * @param new pointer to added node.
  * @return pointer to list.
  */
-List* insert_list_node_last(List* l, List_node* new) {
+List* list_insert_node_last(List* l, List_node* new) {
     if (l->node == NULL) {
-        insert_list_node_first_node(l, new);
+        list_insert_first_node(l, new);
     } else {
-        l->node->prev = insert_list_node_next(l, l->node->prev, new);
+        l->node->prev = list_insert_node_next(l, l->node->prev, new);
     }
 
     return l;
 }
 
 
-/*
- * add new node after last node in list
+/**
+ * @brief add new node after last node in list
+ * @param l pointer to list.
+ * @param data pointer to adde data.
  * @return pointer to list.
  */
-List* insert_list_data_last(List* l, void* data) {
-    return insert_list_node_last(l, get_new_list_node(l, data));
+List* list_insert_data_last(List* l, void* data) {
+    return list_insert_node_last(l, list_get_new_node(l, data));
 }
 
 
-/* delete argument node in list. */
-void delete_list_node(List* l, List_node* target) {
+
+/**
+ * @brief remove argument node in list.
+ *        And this NOT releases data.
+ *        therefor, You MUST release data yourself.
+ * @param l pointer to list.
+ * @param target pointer to deleted node.
+ * @return pointer to removed node.
+ */
+List_node* remove_list_node(List* l, List_node* target) {
     assert(target != NULL);
 
     if (l->size == 1) {
+        /*
+         * size equals 1.
+         * this means that list has only "node".
+         */
         l->node = NULL;
     } else if (target == l->node) {
+        /* change "node". */
         l->node->prev->next = target->next;
         target->next->prev = l->node->prev;
         l->node = target->next;
@@ -190,17 +239,29 @@ void delete_list_node(List* l, List_node* target) {
         target->prev->next = target->next;
     }
 
-    if (l->free != NULL) {
-        l->free(target);
-    } else {
-        free(target);
-    }
-
     --l->size;
+
+    return target;
 }
 
 
-/* all node in list will be freed. */
+/**
+ * @brief delete argument node in list.
+ *        And this releases data.
+ * @param l pointer to list.
+ * @param target pointer to deleted node.
+ */
+void delete_list_node(List* l, List_node* target) {
+    assert(target != NULL);
+
+    ((l->free == NULL) ? (free) : (l->free))(remove_list_node(l, target));
+}
+
+
+/**
+ * @brief all node in list be freed.
+ * @param l pointer to list.
+ */
 void destruct_list(List* l) {
     if (l->node == NULL) {
         /* do nothing. */
@@ -230,12 +291,23 @@ void destruct_list(List* l) {
 }
 
 
+/**
+ * @brief get the number of node in list.
+ * @param l pointer to list.
+ * @return the number of node.
+ */
 size_t get_list_size(List const* l) {
     return l->size;
 }
 
 
-/* for each loop. */
+/**
+ * @brief this function provide for_each loop.
+ * @param l pointer to list.
+ * @param f pointer to function witch decide stop or continue loop.
+ * @param is_reverse loop direction flag. if it is true, loop is first to last.
+ * @return pointer to node when loop finished or stoped.
+ */
 List_node* list_for_each(List* const l, for_each_func const f, bool const is_reverse) {
     assert(f != NULL);
 
@@ -279,8 +351,13 @@ static bool search_loop(void* data) {
 }
 
 
-/* search node witch has argument data. */
-List_node* search_list_node(List* l, void* data) {
+/**
+ * @brief search node witch has argument data.
+ * @param l pointer to list.
+ * @param data pointer to search key data.
+ * @return
+ */
+List_node* list_search_node(List* l, void* data) {
     if (l->node == NULL) {
         return NULL;
     }
@@ -295,6 +372,7 @@ List_node* search_list_node(List* l, void* data) {
 
     return (n != NULL) ? n : NULL;
 }
+
 
 
 /* ---------------------------------------------------------------------------------------------------- */
@@ -380,13 +458,13 @@ static void str_release_func(void* d) {
 
 int main(void) {
     List l;
-    init_list(&l, sizeof(int), NULL);
+    list_init(&l, sizeof(int), NULL);
 
     print_list(&l);
 
     printf("Insert First-------------------\n");
     for (int i = 0; i < check_size; i++) {
-        insert_list_data_first(&l, test_array + i);
+        list_insert_data_first(&l, test_array + i);
     }
     assert(get_list_size(&l) == check_size);
 
@@ -405,7 +483,7 @@ int main(void) {
 
     printf("Insert Last-------------------\n");
     for (int i = 0; i < check_size; i++) {
-        insert_list_data_last(&l, test_array + i);
+        list_insert_data_last(&l, test_array + i);
     }
 
     printf("first -> ");
@@ -421,15 +499,15 @@ int main(void) {
 
     printf("Insert first/next/prev---------\n");
     int a = 10, b = 20, c = 50;
-    insert_list_data_first(&l, &a);
+    list_insert_data_first(&l, &a);
     print_node(l.node);
     assert(*(int*)(l.node->data) == a);
 
-    insert_list_data_next(&l, l.node, &b);
+    list_insert_data_next(&l, l.node, &b);
     print_node(l.node->next);
     assert(*(int*)l.node->next->data == b);
 
-    insert_list_data_prev(&l, l.node, &c);
+    list_insert_data_prev(&l, l.node, &c);
     print_node(l.node->prev);
     assert(*(int*)l.node->prev->data == c);
 
@@ -454,11 +532,11 @@ int main(void) {
     test_destract(&l);
 
     printf("Release func-------------------\n");
-    init_list(&l, sizeof(char*), str_release_func);
+    list_init(&l, sizeof(char*), str_release_func);
     for (int i = 0; i < TEST_WORDS_SIZE; i++) {
         char* c = (char*)malloc(strlen(test_words[i]));
         strcpy(c, test_words[i]);
-        insert_list_data_last(&l, &c);
+        list_insert_data_last(&l, &c);
     }
 
     printf("first -> ");

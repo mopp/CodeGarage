@@ -18,7 +18,7 @@ Queue* init_queue(Queue* q, size_t size, release_func f, bool is_data_pointer) {
     q->list = (List*)malloc(sizeof(List));
     q->is_data_type_pointer = is_data_pointer;
 
-    init_list(q->list, size, f);
+    list_init(q->list, size, f);
 
     return q;
 }

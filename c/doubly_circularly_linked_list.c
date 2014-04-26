@@ -4,8 +4,8 @@
  *      prev                            next
  *          node(X0)<->X1<->node(X0)->X1->...
  * @author mopp
- * @version 0.1
- * @date 2014-04-23
+ * @version 0.2
+ * @date 2014-04-25
  */
 /* #define NDBUG */
 
@@ -48,14 +48,12 @@ List_node* get_new_list_node(List* l, void* data) {
 
 
 /*
- * add new node into next of argument node.
+ * add new node into next of second argument node.
  * after execute, list is "... -> target -> new_node -> ...".
- * @return pointer to new node.
+ * @return pointer to add node.
  */
-List_node* insert_list_node_next(List* l, List_node* target, void* data) {
+List_node* insert_list_node_next(List* l, List_node* target, List_node* new) {
     assert(l != NULL && target != NULL);
-
-    List_node* new = get_new_list_node(l, data);
 
     new->next = target->next;
     new->next->prev = new;
@@ -70,14 +68,25 @@ List_node* insert_list_node_next(List* l, List_node* target, void* data) {
 
 
 /*
+ * add new data into next of argument node.
+ * And allocate new node for data of argument.
+ * after execute, list is "... -> target -> new_node -> ...".
+ * @return pointer to new node.
+ */
+List_node* insert_list_data_next(List* l, List_node* target, void* data) {
+    assert(l != NULL && target != NULL);
+
+    return insert_list_node_next(l, target, get_new_list_node(l, data));
+}
+
+
+/*
  * add new node into prev of argument node.
  * after execute, list is "... -> new_node -> target -> ...".
  * @return pointer to new node.
  */
-List_node* insert_list_node_prev(List* l, List_node* target, void* data) {
+List_node* insert_list_node_prev(List* l, List_node* target, List_node* new) {
     assert(l != NULL && target != NULL);
-
-    List_node* new = get_new_list_node(l, data);
 
     new->prev = target->prev;
     new->prev->next = new;
@@ -91,12 +100,24 @@ List_node* insert_list_node_prev(List* l, List_node* target, void* data) {
 }
 
 
+/*
+ * add new data into prev of argument node.
+ * after execute, list is "... -> new_node -> target -> ...".
+ * @return pointer to new node.
+ */
+List_node* insert_list_data_prev(List* l, List_node* target, void* data) {
+    assert(l != NULL && target != NULL);
+
+    return insert_list_node_prev(l, target, get_new_list_node(l, data));
+}
+
+
 /* insert node when list has NOT any node. */
-static inline void insert_list_node_first_node(List* l, void* data) {
+static inline void insert_list_node_first_node(List* l, List_node* new) {
     assert(l->node == NULL);
 
     /* set pointer to self. */
-    l->node = get_new_list_node(l, data);
+    l->node = new;
     l->node->next = l->node->prev = l->node;
 
     ++l->size;
@@ -109,11 +130,36 @@ static inline void insert_list_node_first_node(List* l, void* data) {
  * add new node before first node in list
  * @return pointer to list.
  */
-List* insert_list_node_first(List* l, void* data) {
+List* insert_list_node_first(List* l, List_node* new) {
     if (l->node == NULL) {
-        insert_list_node_first_node(l, data);
+        insert_list_node_first_node(l, new);
     } else {
-        l->node = insert_list_node_prev(l, l->node, data);
+        l->node = insert_list_node_prev(l, l->node, new);
+    }
+
+    return l;
+}
+
+
+/*
+ * add new data before first node in list
+ * @return pointer to list.
+ */
+List* insert_list_data_first(List* l, void* data) {
+    return insert_list_node_first(l, get_new_list_node(l, data));
+}
+
+
+
+/*
+ * add new node after last node in list
+ * @return pointer to list.
+ */
+List* insert_list_node_last(List* l, List_node* new) {
+    if (l->node == NULL) {
+        insert_list_node_first_node(l, new);
+    } else {
+        l->node->prev = insert_list_node_next(l, l->node->prev, new);
     }
 
     return l;
@@ -124,14 +170,8 @@ List* insert_list_node_first(List* l, void* data) {
  * add new node after last node in list
  * @return pointer to list.
  */
-List* insert_list_node_last(List* l, void* data) {
-    if (l->node == NULL) {
-        insert_list_node_first_node(l, data);
-    } else {
-        l->node->prev = insert_list_node_next(l, l->node->prev, data);
-    }
-
-    return l;
+List* insert_list_data_last(List* l, void* data) {
+    return insert_list_node_last(l, get_new_list_node(l, data));
 }
 
 
@@ -346,7 +386,7 @@ int main(void) {
 
     printf("Insert First-------------------\n");
     for (int i = 0; i < check_size; i++) {
-        insert_list_node_first(&l, test_array + i);
+        insert_list_data_first(&l, test_array + i);
     }
     assert(get_list_size(&l) == check_size);
 
@@ -365,7 +405,7 @@ int main(void) {
 
     printf("Insert Last-------------------\n");
     for (int i = 0; i < check_size; i++) {
-        insert_list_node_last(&l, test_array + i);
+        insert_list_data_last(&l, test_array + i);
     }
 
     printf("first -> ");
@@ -381,15 +421,15 @@ int main(void) {
 
     printf("Insert first/next/prev---------\n");
     int a = 10, b = 20, c = 50;
-    insert_list_node_first(&l, &a);
+    insert_list_data_first(&l, &a);
     print_node(l.node);
     assert(*(int*)(l.node->data) == a);
 
-    insert_list_node_next(&l, l.node, &b);
+    insert_list_data_next(&l, l.node, &b);
     print_node(l.node->next);
     assert(*(int*)l.node->next->data == b);
 
-    insert_list_node_prev(&l, l.node, &c);
+    insert_list_data_prev(&l, l.node, &c);
     print_node(l.node->prev);
     assert(*(int*)l.node->prev->data == c);
 
@@ -418,7 +458,7 @@ int main(void) {
     for (int i = 0; i < TEST_WORDS_SIZE; i++) {
         char* c = (char*)malloc(strlen(test_words[i]));
         strcpy(c, test_words[i]);
-        insert_list_node_last(&l, &c);
+        insert_list_data_last(&l, &c);
     }
 
     printf("first -> ");

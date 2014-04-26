@@ -2,8 +2,8 @@
  * @file doubly_circularly_linked_list.c
  * @brief DoublyCircularlyLinkedList Header.
  * @author mopp
- * @version 0.1
- * @date 2014-04-23
+ * @version 0.2
+ * @date 2014-04-25
  */
 
 #ifndef _DOUBLY_CIRCULARLY_LINKED_LIST_H
@@ -17,11 +17,13 @@
  * It is used in destruct_list().
  */
 typedef void (*release_func)(void*);
+
 /*
  * comparison function for list node.
  * It is used in search_list_node().
  */
 typedef bool (*comp_func)(void*, void*);
+
 /*
  * for each function for list node.
  * if return value is true, loop is abort
@@ -40,7 +42,6 @@ struct list_node {
 };
 typedef struct list_node List_node;
 
-
 /* List structure */
 struct list {
     List_node* node;       /* start position pointer to node.
@@ -52,18 +53,17 @@ struct list {
 };
 typedef struct list List;
 
-
-extern List* init_list(List*, size_t, release_func);
-extern List_node* get_new_list_node(List*, void*);
-extern List_node* insert_list_node_next(List*, List_node*, void*);
-extern List_node* insert_list_node_prev(List*, List_node*, void*);
-extern List* insert_list_node_first(List*, void*);
-extern List* insert_list_node_last(List*, void*);
-extern void delete_list_node(List*, List_node*);
-extern void destruct_list(List*);
-extern size_t get_list_size(List const*);
-extern List_node* list_for_each(List* const, for_each_func const, bool const);
-extern List_node* search_list_node(List*, void*);
+// extern List* init_list(List*, size_t, release_func);
+// extern List_node* get_new_list_node(List*, void*);
+// extern List_node* insert_list_node_next(List*, List_node*, void*);
+// extern List_node* insert_list_node_prev(List*, List_node*, void*);
+// extern List* insert_list_node_first(List*, void*);
+// extern List* insert_list_node_last(List*, void*);
+// extern void delete_list_node(List*, List_node*);
+// extern void destruct_list(List*);
+// extern size_t get_list_size(List const*);
+// extern List_node* list_for_each(List* const, for_each_func const, bool const);
+// extern List_node* search_list_node(List*, void*);
 
 
 #endif

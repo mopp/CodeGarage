@@ -12,7 +12,7 @@
 #include "queue.h"
 
 
-Queue* init_queue(Queue* q, size_t size, release_func f, bool is_data_pointer) {
+Queue* queue_init(Queue* q, size_t size, release_func f, bool is_data_pointer) {
     assert(q != NULL);
 
     q->list = (List*)malloc(sizeof(List));
@@ -24,17 +24,17 @@ Queue* init_queue(Queue* q, size_t size, release_func f, bool is_data_pointer) {
 }
 
 
-bool is_queue_empty(Queue const* q) {
+bool queue_is_empty(Queue const* q) {
     assert(q != NULL);
 
-    return (get_list_size(q->list) == 0) ? true : false;
+    return (list_get_size(q->list) == 0) ? true : false;
 }
 
 
-void* get_queue_first(Queue* q) {
+void* queue_get_first(Queue* q) {
     assert(q != NULL);
 
-    if (true == is_queue_empty(q)) {
+    if (true == queue_is_empty(q)) {
         return NULL;
     }
 
@@ -42,60 +42,60 @@ void* get_queue_first(Queue* q) {
 }
 
 
-void delete_queue_first(Queue* q) {
+void queue_delete_first(Queue* q) {
     assert(q != NULL);
 
-    if (true == is_queue_empty(q)) {
+    if (true == queue_is_empty(q)) {
         return;
     }
 
-    delete_list_node(q->list, q->list->node);
+    list_delete_node(q->list, q->list->node);
 }
 
 
-void* enqueue(Queue* q, void* data) {
+void* queue_enqueue(Queue* q, void* data) {
     assert(q != NULL && data != NULL);
 
-    insert_list_node_last(q->list, data);
+    list_insert_data_last(q->list, data);
 
     return data;
 }
 
 
-void* dequeue(Queue* q) {
+void* queue_dequeue(Queue* q) {
     assert(q != NULL);
 
-    if (true == is_queue_empty(q)) {
+    if (true == queue_is_empty(q)) {
         return NULL;
     }
 
     void* t = NULL;
     if (q->is_data_type_pointer == false) {
-        t = get_queue_first(q);
+        t = queue_get_first(q);
     } else {
         t = malloc(q->list->data_type_size);
-        memcpy(t, get_queue_first(q), q->list->data_type_size);
+        memcpy(t, queue_get_first(q), q->list->data_type_size);
     }
 
 
-    delete_queue_first(q);
+    queue_delete_first(q);
 
     return t;
 }
 
 
-void destruct_queue(Queue* q) {
+void queue_destruct(Queue* q) {
     assert(q != NULL);
 
-    destruct_list(q->list);
+    list_destruct(q->list);
     free(q->list);
 }
 
 
-size_t get_queue_size(Queue const* q) {
+size_t queue_get_size(Queue const* q) {
     assert(q != NULL);
 
-    return get_list_size(q->list);
+    return list_get_size(q->list);
 }
 
 
@@ -121,44 +121,44 @@ static void str_release_func(void* d) {
 int main(void) {
     Queue q;
     Queue* const qp = &q;
-    init_queue(qp, sizeof(int), NULL, false);
+    queue_init(qp, sizeof(int), NULL, false);
 
-    assert(dequeue(qp) == NULL);
-    assert(get_queue_first(qp) == NULL);
-    assert(get_queue_size(qp) == 0);
+    assert(queue_dequeue(qp) == NULL);
+    assert(queue_get_first(qp) == NULL);
+    assert(queue_get_size(qp) == 0);
 
-    printf("Enqueue -----------------------\n");
+    printf("queue_enqueue -----------------------\n");
     for (int i = 0; i < check_size; i++) {
-        enqueue(qp, &test_array[i]);
+        queue_enqueue(qp, &test_array[i]);
         printf("%d ", test_array[check_size - i - 1]);
-        assert(*(int*)get_queue_first(qp) == test_array[0]);
+        assert(*(int*)queue_get_first(qp) == test_array[0]);
     }
-    assert(get_queue_size(qp) == check_size);
+    assert(queue_get_size(qp) == check_size);
     printf("\n-------------------------------\n");
 
-    printf("Dequeue -----------------------\n");
+    printf("queue_dequeue -----------------------\n");
     for (int i = 0; i < check_size; i++) {
-        int n = *(int*)dequeue(qp);
+        int n = *(int*)queue_dequeue(qp);
         assert(n == test_array[i]);
         printf("%d ", n);
     }
-    assert(get_queue_size(qp) == 0);
+    assert(queue_get_size(qp) == 0);
     printf("\n-------------------------------\n");
 
-    destruct_queue(qp);
+    queue_destruct(qp);
 
     printf("Release func-------------------\n");
-    init_queue(qp, sizeof(char*), str_release_func, true);
+    queue_init(qp, sizeof(char*), str_release_func, true);
     for (int i = 0; i < TEST_WORDS_SIZE; i++) {
         char* c = (char*)malloc(strlen(test_words[i]));
         strcpy(c, test_words[i]);
-        printf("Enqueue and Dequeue: %s\n", test_words[i]);
-        enqueue(qp, &c);
-        assert(strcmp(*(char**)dequeue(qp), test_words[i]) == 0);
+        printf("queue_enqueue and queue_dequeue: %s\n", test_words[i]);
+        queue_enqueue(qp, &c);
+        assert(strcmp(*(char**)queue_dequeue(qp), test_words[i]) == 0);
     }
-    assert(get_queue_size(qp) == 0);
-    destruct_queue(qp);
-    assert(get_queue_size(qp) == 0);
+    assert(queue_get_size(qp) == 0);
+    queue_destruct(qp);
+    assert(queue_get_size(qp) == 0);
     printf("Relese All element\n");
     printf("-------------------------------\n");
 

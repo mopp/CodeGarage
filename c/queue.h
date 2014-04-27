@@ -19,14 +19,14 @@ struct queue {
 typedef struct queue Queue;
 
 
-extern Queue* init_queue(Queue*, size_t, release_func, bool);
-extern bool is_queue_empty(Queue const*);
-extern void* get_queue_first(Queue*);
-extern void delete_queue_first(Queue*);
-extern void* enqueue(Queue*, void*);
-extern void* dequeue(Queue*);
-extern void destruct_queue(Queue*);
-extern size_t get_queue_size(Queue const*);
+extern Queue* queue_init(Queue*, size_t, release_func, bool);
+extern bool queue_is_empty(Queue const*);
+extern void* queue_get_first(Queue*);
+extern void queue_delete_first(Queue*);
+extern void* queue_enqueue(Queue*, void*);
+extern void* queue_dequeue(Queue*);
+extern void queue_destruct(Queue*);
+extern size_t queue_get_size(Queue const*);
 
 
 #endif

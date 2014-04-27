@@ -14,7 +14,7 @@
 
 /*
  * free function for list node.
- * It is used in destruct_list().
+ * It is used in list_destruct().
  */
 typedef void (*release_func)(void*);
 
@@ -64,11 +64,12 @@ extern List* list_insert_node_first(List*, List_node*);
 extern List* list_insert_data_first(List*, void*);
 extern List* list_insert_node_last(List*, List_node*);
 extern List* list_insert_data_last(List*, void*);
-extern List_node* remove_list_node(List*, List_node* target);
-extern void delete_list_node(List*, List_node* target);
-extern void destruct_list(List*);
-extern size_t get_list_size(List const*);
+extern List_node* list_remove_node(List*, List_node* target);
+extern void list_delete_node(List*, List_node* target);
+extern void list_destruct(List*);
+extern size_t list_get_size(List const*);
 extern List_node* list_for_each(List* const, for_each_func const, bool const);
+extern List_node* list_node_for_each(List* const, List_node*, for_each_func const, bool const);
 extern List_node* list_search_node(List*, void*);
 
 

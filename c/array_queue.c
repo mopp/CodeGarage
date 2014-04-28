@@ -5,26 +5,12 @@
  * @version 0.1
  * @date 2014-04-27
  */
+#define NDEBUG
 
-#include <stddef.h>
 #include <assert.h>
 #include <stdlib.h>
 #include <string.h>
-#include <stdbool.h>
-
-typedef void (*release_func)(void*);
-
-struct aqueue {
-    void** data; /* pointer to any data(void*) array. */
-    size_t first, last;
-    size_t capacity;
-    size_t size;
-    size_t data_type_size; /* it provided by sizeof(data). */
-    release_func free;
-};
-typedef struct aqueue Aqueue;
-
-extern size_t aqueue_get_size(Aqueue const*);
+#include "array_queue.h"
 
 
 Aqueue* aqueue_init(Aqueue* q, size_t t_size, size_t capacity, release_func f) {
@@ -84,7 +70,7 @@ void aqueue_delete_first(Aqueue* q) {
 
 void* aqueue_insert(Aqueue* q, void* data) {
     if (aqueue_is_full(q) == true) {
-       return NULL;
+        return NULL;
     }
 
     q->data[q->last] = malloc(q->data_type_size);

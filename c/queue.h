@@ -23,8 +23,7 @@ extern Queue* queue_init(Queue*, size_t, release_func, bool);
 extern bool queue_is_empty(Queue const*);
 extern void* queue_get_first(Queue*);
 extern void queue_delete_first(Queue*);
-extern void* queue_enqueue(Queue*, void*);
-extern void* queue_dequeue(Queue*);
+extern void* queue_insert(Queue*, void*);
 extern void queue_destruct(Queue*);
 extern size_t queue_get_size(Queue const*);
 

@@ -254,7 +254,9 @@ List_node* list_remove_node(List* l, List_node* target) {
 void list_delete_node(List* l, List_node* target) {
     assert(target != NULL);
 
-    ((l->free == NULL) ? (free) : (l->free))(list_remove_node(l, target));
+    List_node* n = list_remove_node(l, target);
+    ((l->free == NULL) ? (free) : (l->free))(n->data);
+    free(n);
 }
 
 

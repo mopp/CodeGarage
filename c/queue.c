@@ -53,34 +53,12 @@ void queue_delete_first(Queue* q) {
 }
 
 
-void* queue_enqueue(Queue* q, void* data) {
+void* queue_insert(Queue* q, void* data) {
     assert(q != NULL && data != NULL);
 
     list_insert_data_last(q->list, data);
 
     return data;
-}
-
-
-void* queue_dequeue(Queue* q) {
-    assert(q != NULL);
-
-    if (true == queue_is_empty(q)) {
-        return NULL;
-    }
-
-    void* t = NULL;
-    if (q->is_data_type_pointer == false) {
-        t = queue_get_first(q);
-    } else {
-        t = malloc(q->list->data_type_size);
-        memcpy(t, queue_get_first(q), q->list->data_type_size);
-    }
-
-
-    queue_delete_first(q);
-
-    return t;
 }
 
 
@@ -123,13 +101,12 @@ int main(void) {
     Queue* const qp = &q;
     queue_init(qp, sizeof(int), NULL, false);
 
-    assert(queue_dequeue(qp) == NULL);
     assert(queue_get_first(qp) == NULL);
     assert(queue_get_size(qp) == 0);
 
-    printf("queue_enqueue -----------------------\n");
+    printf("queue_insert -----------------------\n");
     for (int i = 0; i < check_size; i++) {
-        queue_enqueue(qp, &test_array[i]);
+        queue_insert(qp, &test_array[i]);
         printf("%d ", test_array[check_size - i - 1]);
         assert(*(int*)queue_get_first(qp) == test_array[0]);
     }
@@ -138,9 +115,10 @@ int main(void) {
 
     printf("queue_dequeue -----------------------\n");
     for (int i = 0; i < check_size; i++) {
-        int n = *(int*)queue_dequeue(qp);
-        assert(n == test_array[i]);
+        int n = *(int*)queue_get_first(qp);
         printf("%d ", n);
+        assert(n == test_array[i]);
+        queue_delete_first(qp);
     }
     assert(queue_get_size(qp) == 0);
     printf("\n-------------------------------\n");
@@ -152,15 +130,18 @@ int main(void) {
     for (int i = 0; i < TEST_WORDS_SIZE; i++) {
         char* c = (char*)malloc(strlen(test_words[i]));
         strcpy(c, test_words[i]);
-        printf("queue_enqueue and queue_dequeue: %s\n", test_words[i]);
-        queue_enqueue(qp, &c);
-        assert(strcmp(*(char**)queue_dequeue(qp), test_words[i]) == 0);
+        printf("queue_insert and queue_dequeue: %s\n", test_words[i]);
+        queue_insert(qp, &c);
+        assert(strcmp(*(char**)queue_get_first(qp), test_words[i]) == 0);
+        queue_delete_first(qp);
     }
     assert(queue_get_size(qp) == 0);
     queue_destruct(qp);
     assert(queue_get_size(qp) == 0);
     printf("Relese All element\n");
     printf("-------------------------------\n");
+
+    printf("All Test Passed.\n");
 
     return 0;
 }

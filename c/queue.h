@@ -14,12 +14,11 @@
 
 struct queue {
     List* list;
-    bool is_data_type_pointer;
 };
 typedef struct queue Queue;
 
 
-extern Queue* queue_init(Queue*, size_t, release_func, bool);
+extern Queue* queue_init(Queue*, size_t, release_func);
 extern bool queue_is_empty(Queue const*);
 extern void* queue_get_first(Queue*);
 extern void queue_delete_first(Queue*);

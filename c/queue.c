@@ -12,11 +12,10 @@
 #include "queue.h"
 
 
-Queue* queue_init(Queue* q, size_t size, release_func f, bool is_data_pointer) {
+Queue* queue_init(Queue* q, size_t size, release_func f) {
     assert(q != NULL);
 
     q->list = (List*)malloc(sizeof(List));
-    q->is_data_type_pointer = is_data_pointer;
 
     list_init(q->list, size, f);
 
@@ -99,7 +98,7 @@ static void str_release_func(void* d) {
 int main(void) {
     Queue q;
     Queue* const qp = &q;
-    queue_init(qp, sizeof(int), NULL, false);
+    queue_init(qp, sizeof(int), NULL);
 
     assert(queue_get_first(qp) == NULL);
     assert(queue_get_size(qp) == 0);
@@ -126,7 +125,7 @@ int main(void) {
     queue_destruct(qp);
 
     printf("Release func-------------------\n");
-    queue_init(qp, sizeof(char*), str_release_func, true);
+    queue_init(qp, sizeof(char*), str_release_func);
     for (int i = 0; i < TEST_WORDS_SIZE; i++) {
         char* c = (char*)malloc(strlen(test_words[i]));
         strcpy(c, test_words[i]);

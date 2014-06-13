@@ -5,22 +5,32 @@
  * @version 0.1
  * @date 2014-04-27
  */
-#define NDEBUG
+/* #define NDEBUG */
 
 #include <assert.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdint.h>
 #include "array_queue.h"
 
 
-Aqueue* aqueue_init(Aqueue* q, size_t t_size, size_t capacity, release_func f) {
+Aqueue* aqueue_init(Aqueue* q, size_t type_size, size_t capacity, release_func f) {
     assert(q != NULL);
 
     q->data = (void**)malloc(sizeof(void*) * capacity);
+
+    /* allocate all element area. */
+    void* elements = malloc(type_size * capacity);
+    uintptr_t addr = (uintptr_t)elements;
+
+    for (size_t i = 0; i < capacity; i++) {
+        q->data[i] = (void*)(addr + (i * type_size));
+    }
+
     q->first = q->last = 0;
     q->capacity = capacity;
     q->size = 0;
-    q->data_type_size = t_size;
+    q->data_type_size = type_size;
     q->free = f;
 
     return q;
@@ -59,9 +69,6 @@ void aqueue_delete_first(Aqueue* q) {
         return;
     }
 
-    ((q->free != NULL) ? q->free : free)(q->data[q->first]);
-    q->data[q->first] = NULL;
-
     q->first = (q->first + 1 == q->capacity) ? 0 : q->first + 1;
 
     --q->size;
@@ -72,8 +79,6 @@ void* aqueue_insert(Aqueue* q, void* data) {
     if (aqueue_is_full(q) == true) {
         return NULL;
     }
-
-    q->data[q->last] = malloc(q->data_type_size);
 
     memcpy(q->data[q->last], data, q->data_type_size);
 
@@ -90,9 +95,10 @@ void aqueue_destruct(Aqueue* q) {
 
     size_t const size = aqueue_get_size(q);
     for (int i = 0; i < size; i++) {
-        aqueue_delete_first(q);
+        ((q->free != NULL) ? q->free : free)(q->data[i]);
     }
 
+    free(q->data[0]); /* In aqueue_init, malloced addr is set at index 0 of array. */
     free(q->data);
 }
 
@@ -124,7 +130,10 @@ static char const* test_words[] = {"Apple", "Orange", "Banana", "Lemon", "Lime",
 
 static void str_release_func(void* d) {
     free(*(char**)d);
-    free(d);
+    /*
+     * NOTE: In this, free(d) must be written
+     * Because, elements memory area is allocated in aqueue function.
+     */
 }
 
 

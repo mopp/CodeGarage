@@ -5,7 +5,7 @@
  * @version 0.1
  * @date 2014-04-27
  */
-#define NDEBUG
+/* #define NDEBUG */
 
 #include <assert.h>
 #include <stdlib.h>

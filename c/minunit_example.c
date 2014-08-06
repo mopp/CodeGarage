@@ -36,5 +36,5 @@ int main(void) {
 
     printf("The number of test: %d\n", minunit_test_counter);
 
-    return result != 0;
+    return result != NULL;
 }

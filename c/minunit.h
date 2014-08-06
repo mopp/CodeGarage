@@ -6,7 +6,6 @@
 #define _MIN_UNIT_H_
 
 
-
 static int minunit_test_counter;
 
 
@@ -18,13 +17,13 @@ static int minunit_test_counter;
     } while (0)
 
 
-#define MIN_UNIT_RUN_TEST(func_name)   \
-    do {                               \
-        char const *msg = func_name(); \
-        minunit_test_counter++;        \
-        if (msg != NULL) {             \
-            return msg;                \
-        }                              \
+#define MIN_UNIT_RUN_TEST(func_name)     \
+    do {                                 \
+        char const *msg = (func_name)(); \
+        minunit_test_counter++;          \
+        if (msg != NULL) {               \
+            return msg;                  \
+        }                                \
     } while (0)
 
 

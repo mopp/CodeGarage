@@ -2,8 +2,10 @@
 *
 
 # allow directors
-!c
+!t
 
 # allow files
 !.gitignore
-!*.md
+!*.c
+!*.h
+!Makefile

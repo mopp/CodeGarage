@@ -1,5 +1,5 @@
 /*
- * @file doubly_circularly_linked_list.c
+ * @file dlist.c
  * @brief This list is DoublyCircularlyLinkedList.
  *      prev                            next
  *          node(X0)<->X1<->node(X0)->X1->...
@@ -7,13 +7,13 @@
  * @version 0.2
  * @date 2014-04-25
  */
-/* #define NDBUG */
+
+#include "dlist.h"
 
 #include <assert.h>
 #include <string.h>
 #include <stdlib.h>
 
-#include "doubly_circularly_linked_list.h"
 
 
 /**
@@ -178,7 +178,8 @@ List* list_insert_node_first(List* l, List_node* new) {
  * @return pointer to list.
  */
 List* list_insert_data_first(List* l, void* data) {
-    return list_insert_node_first(l, list_get_new_node(l, data));
+    List_node* n = list_get_new_node(l, data);
+    return (n == NULL) ? NULL : list_insert_node_first(l, n);
 }
 
 
@@ -207,7 +208,8 @@ List* list_insert_node_last(List* l, List_node* new) {
  * @return pointer to list.
  */
 List* list_insert_data_last(List* l, void* data) {
-    return list_insert_node_last(l, list_get_new_node(l, data));
+    List_node* n = list_get_new_node(l, data);
+    return (n == NULL) ? NULL : list_insert_node_last(l, n);
 }
 
 
@@ -352,7 +354,7 @@ List_node* list_for_each(List* const l, for_each_func const f, bool const is_rev
 static void* search_target;
 static List* search_list;
 static bool search_loop(void* data) {
-    return (0 == memcmp(search_target, data, search_list->data_type_size)) ? true : false;
+    return (data == search_target || 0 == memcmp(search_target, data, search_list->data_type_size)) ? true : false;
 }
 
 
@@ -360,7 +362,7 @@ static bool search_loop(void* data) {
  * @brief search node witch has argument data.
  * @param l pointer to list.
  * @param data pointer to search key data.
- * @return
+ * @return pointer to searched node.
  */
 List_node* list_search_node(List* l, void* data) {
     if (l->node == NULL) {
@@ -379,202 +381,13 @@ List_node* list_search_node(List* l, void* data) {
 }
 
 
-
-/* ---------------------------------------------------------------------------------------------------- */
-#ifndef NDEBUG
-
-
-#include <stdio.h>
-
-#define MAX_SIZE 10
-static int test_array[MAX_SIZE] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
-static char const* test_words[] = {"Apple", "Orange", "Banana", "Lemon", "Lime", "Strawberry"};
-#define TEST_WORDS_SIZE (sizeof(test_words) / sizeof(test_words[0]))
-static int const check_size = MAX_SIZE;
-
-static void print_list(List const* const l) {
-    printf("Print List---------------------\n");
-    printf("node           : %p\n", l->node);
-    printf("data in node   : %d\n", (l->node != NULL) ? *(int*)l->node->data : -1);
-    printf("data_type_size : %ld\n", l->data_type_size);
-    printf("size           : %ld\n", list_get_size(l));
-    printf("-------------------------------\n");
+/**
+ * @brief exchange each data.
+ * @param x pointer to list_node.
+ * @param y pointer to list_node.
+ */
+void list_swap_data(List_node* x, List_node* y) {
+    void* t = x->data;
+    x->data = y->data;;
+    y->data = t;
 }
-
-
-static void print_node(List_node const* const n) {
-    if (n == NULL) {
-        return;
-    }
-    printf("Print Node---------------------\n");
-    printf("data        : %d\n", *(int*)n->data);
-    printf("next        : %p\n", n->next);
-    printf("prev        : %p\n", n->prev);
-    printf("-------------------------------\n");
-}
-
-
-static inline bool echo(void* d) {
-    printf("%d -> ", *(int*)d);
-    return false;
-}
-
-
-static bool test_loop_int_rev(void* d) {
-    static int cnt = 0;
-
-    echo(d);
-    assert(*(int*)d == test_array[cnt++ % check_size]);
-
-    return false;
-}
-
-
-static bool test_loop_int(void* d) {
-    static int cnt = 0;
-
-    echo(d);
-    assert(*(int*)d == test_array[check_size - cnt++ % check_size - 1]);
-
-    return false;
-}
-
-
-static bool test_loop_str(void* d) {
-    printf("%s -> ", *(char**)d);
-    return false;
-}
-
-
-static void test_destract(List* l) {
-    printf("Destruct List------------------\n");
-    list_destruct(l);
-    assert(list_get_size(l) == 0 && l->node == NULL);
-    printf("Delete all node in List\n");
-    printf("-------------------------------\n");
-}
-
-
-static void str_release_func(void* d) {
-    static int cnt = 0;
-    assert(strcmp(test_words[cnt++], *(char**)d) == 0);
-
-    free(*(char**)d);
-    free(d);
-}
-
-
-int main(void) {
-    List l;
-    list_init(&l, sizeof(int), NULL);
-
-    print_list(&l);
-    print_node(l.node);
-
-    printf("Insert First-------------------\n");
-    for (int i = 0; i < check_size; i++) {
-        list_insert_data_first(&l, test_array + i);
-    }
-    assert(list_get_size(&l) == check_size);
-
-    printf("first -> ");
-    list_for_each(&l, test_loop_int, false);
-    puts("last");
-
-    printf("last -> ");
-    list_for_each(&l, test_loop_int_rev, true);
-    puts("first");
-    printf("-------------------------------\n");
-
-    test_destract(&l);
-
-    print_list(&l);
-
-    printf("Insert Last-------------------\n");
-    for (int i = 0; i < check_size; i++) {
-        list_insert_data_last(&l, test_array + i);
-    }
-
-    printf("first -> ");
-    list_for_each(&l, test_loop_int_rev, false);
-    puts("last");
-
-    printf("last -> ");
-    list_for_each(&l, test_loop_int, true);
-    puts("first");
-    printf("-------------------------------\n");
-
-    printf("Search node--------------------\n");
-    for (int i = 0; i < check_size; i++) {
-        int ti = i + 1;
-        List_node* t = list_search_node(&l, &ti);
-        if (t != NULL) {
-            printf("%2d found\n", *(int*)t->data);
-        } else {
-            printf("%2d NOT found\n", ti);
-        }
-        assert(*(int*)t->data == ti);
-    }
-    printf("-------------------------------\n");
-
-    test_destract(&l);
-
-    printf("Insert first/next/prev---------\n");
-    int a = 10, b = 20, c = 50;
-    list_insert_data_first(&l, &a);
-    assert(*(int*)(l.node->data) == a);
-
-    list_insert_data_next(&l, l.node, &b);
-    assert(*(int*)l.node->next->data == b);
-
-    list_insert_data_prev(&l, l.node, &c);
-    assert(*(int*)l.node->prev->data == c);
-
-    printf("first -> ");
-    list_for_each(&l, echo, false);
-    puts("last");
-    printf("-------------------------------\n");
-
-    printf("Delete Node--------------------\n");
-    list_delete_node(&l, l.node);
-    assert(*(int*)l.node->data == b);
-
-    list_delete_node(&l, l.node);
-    assert(*(int*)l.node->data == c);
-
-    list_delete_node(&l, l.node);
-    assert(list_get_size(&l) == 0 && l.node == NULL);
-
-    print_list(&l);
-    printf("-------------------------------\n");
-
-    test_destract(&l);
-
-    printf("Release func-------------------\n");
-    list_init(&l, sizeof(char*), str_release_func);
-    for (int i = 0; i < TEST_WORDS_SIZE; i++) {
-        char* c = (char*)malloc(strlen(test_words[i]));
-        strcpy(c, test_words[i]);
-        list_insert_data_last(&l, &c);
-    }
-
-    printf("first -> ");
-    list_for_each(&l, test_loop_str, false);
-    puts("last");
-    printf("first -> ");
-    list_node_for_each(&l, l.node->next->next, test_loop_str, false);
-    puts("last");
-    assert(list_get_size(&l) == TEST_WORDS_SIZE);
-
-    printf("-------------------------------\n");
-
-    test_destract(&l);
-
-    printf("\nAll Test Passed !\n");
-
-    return 0;
-}
-
-
-#endif
-/* ---------------------------------------------------------------------------------------------------- */

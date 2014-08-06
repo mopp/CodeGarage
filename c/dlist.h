@@ -1,16 +1,17 @@
 /*
- * @file doubly_circularly_linked_list.c
+ * @file dlist.h
  * @brief DoublyCircularlyLinkedList Header.
  * @author mopp
  * @version 0.2
  * @date 2014-04-25
  */
 
-#ifndef _DOUBLY_CIRCULARLY_LINKED_LIST_H
-#define _DOUBLY_CIRCULARLY_LINKED_LIST_H
+#ifndef _DLIST_H_
+#define _DLIST_H_
 
 
 #include <stdbool.h>
+#include <stddef.h>
 
 /*
  * free function for list node.

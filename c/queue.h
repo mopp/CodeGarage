@@ -10,7 +10,7 @@
 #define _QUEUE_H
 
 
-#include "doubly_circularly_linked_list.h"
+#include "dlist.h"
 
 struct queue {
     List* list;

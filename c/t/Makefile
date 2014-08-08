@@ -16,6 +16,7 @@ MAKEFILE 	:= Makefile
 test: $(MAKEFILE)
 	$(MAKE) dlist
 	$(MAKE) aqueue
+	$(MAKE) lqueue
 
 
 .PHONY: dlist
@@ -28,6 +29,13 @@ dlist: $(MAKEFILE) ../dlist.c ./test_dlist.c
 .PHONY: aqueue
 aqueue: $(MAKEFILE) ../aqueue.c ./test_aqueue.c
 	$(CC) ../$@.c ./test_$@.c -o $@.o
+	@echo ''
+	./$@.o
+	@echo ''
+
+.PHONY: lqueue
+lqueue: $(MAKEFILE) ../dlist.c ../lqueue.c ./test_lqueue.c
+	$(CC) ../dlist.c ../$@.c ./test_$@.c -o $@.o
 	@echo ''
 	./$@.o
 	@echo ''

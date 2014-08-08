@@ -17,6 +17,8 @@
 #define CURRENT_LINE_STR TO_STR(__LINE__)
 #define HERE_STRING __FILE__ " " CURRENT_LINE_STR ":"
 
+#define ARRAY_SIZE_OF(a) (sizeof(a) / sizeof(a[0]))
+
 
 
 #endif

@@ -13,65 +13,73 @@
 #include <stdbool.h>
 #include <stddef.h>
 
-/*
- * free function for list node.
- * It is used in list_destruct().
- */
-typedef void (*release_func)(void*);
-
-/*
- * comparison function for list node.
- * It is used in search_list_node().
- */
-typedef bool (*comp_func)(void*, void*);
+struct dlist;
 
 /*
  * for each function for list node.
  * if return value is true, loop is abort
  */
-typedef bool (*for_each_func)(void*);
+typedef bool (*for_each_func)(struct dlist*, void*);
+
+/*
+ * free function for list node.
+ * It is used in list_destruct().
+ */
+typedef void (*release_func)(struct dlist*, void*);
+
+/*
+ * comparison function for list node.
+ * It is used in search_list_node().
+ */
+typedef bool (*comp_func)(struct dlist*, void*, void*);
 
 
 /*
  * List node structure.
  * It is in List structure below.
  */
-struct list_node {
-    void* data;             /* pointer to stored data in node. */
-    struct list_node* next; /* pointer to next position node. */
-    struct list_node* prev; /* pointer to previous position node. */
+struct dlist_node {
+    void* data;              /* pointer to stored data in node. */
+    struct dlist_node* next; /* pointer to next position node. */
+    struct dlist_node* prev; /* pointer to previous position node. */
 };
-typedef struct list_node List_node;
+typedef struct dlist_node Dlist_node;
 
 /* List structure */
-struct list {
-    List_node* node;       /* start position pointer to node.
-                            * and XXX: this node is first, this node->prev is last.
-                            */
+struct dlist {
+    Dlist_node* node;      /* start position pointer to node.
+                           * and XXX: this node is first, this node->prev is last.
+                           */
     release_func free;     /* function for releasing allocated data. */
     size_t size;           /* the number of node. */
     size_t data_type_size; /* it provided by sizeof(data). */
 };
-typedef struct list List;
+typedef struct dlist Dlist;
 
 
-extern List* list_init(List*, size_t, release_func);
-extern List_node* list_get_new_node(List*, void*);
-extern List_node* list_insert_node_next(List*, List_node*, List_node*);
-extern List_node* list_insert_data_next(List*, List_node*, void*);
-extern List_node* list_insert_node_prev(List*, List_node*, List_node*);
-extern List_node* list_insert_data_prev(List*, List_node*, void*);
-extern List* list_insert_node_first(List*, List_node*);
-extern List* list_insert_data_first(List*, void*);
-extern List* list_insert_node_last(List*, List_node*);
-extern List* list_insert_data_last(List*, void*);
-extern List_node* list_remove_node(List*, List_node* target);
-extern void list_delete_node(List*, List_node* target);
-extern void list_destruct(List*);
-extern size_t list_get_size(List const*);
-extern List_node* list_for_each(List* const, for_each_func const, bool const);
-extern List_node* list_node_for_each(List* const, List_node*, for_each_func const, bool const);
-extern List_node* list_search_node(List*, void*);
+extern Dlist* dlist_init(Dlist*, size_t, release_func);
+extern Dlist_node* dlist_get_new_node(Dlist*, void*);
+extern Dlist_node* dlist_insert_node_next(Dlist*, Dlist_node*, Dlist_node*);
+extern Dlist_node* dlist_insert_data_next(Dlist*, Dlist_node*, void*);
+extern Dlist_node* dlist_insert_node_prev(Dlist*, Dlist_node*, Dlist_node*);
+extern Dlist_node* dlist_insert_data_prev(Dlist*, Dlist_node*, void*);
+extern Dlist* dlist_insert_node_first(Dlist*, Dlist_node*);
+extern Dlist* dlist_insert_data_first(Dlist*, void*);
+extern Dlist* dlist_insert_node_last(Dlist*, Dlist_node*);
+extern Dlist* dlist_insert_data_last(Dlist*, void*);
+extern Dlist_node* dlist_remove_node(Dlist*, Dlist_node* target);
+extern void dlist_delete_node(Dlist*, Dlist_node* target);
+extern void dlist_destruct(Dlist*);
+extern size_t dlist_get_size(Dlist const*);
+extern Dlist_node* dlist_for_each(Dlist* const, for_each_func const, bool const);
+extern Dlist_node* dlist_node_for_each(Dlist* const, Dlist_node*, for_each_func const, bool const);
+extern Dlist_node* dlist_search_node(Dlist*, void*);
+extern void dlist_swap_data(Dlist_node*, Dlist_node*);
+
+
+#define dlist_get_data(type, node_p) (*(type*)((node_p)->data))
+#define dlist_cast_data(type, d) (*(type*)(d))
+
 
 
 #endif

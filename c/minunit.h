@@ -8,16 +8,17 @@
 
 
 #include <stdio.h>
+#include "macro.h"
 
 
 static int minunit_test_counter;
 
 
-#define MIN_UNIT_ASSERT(msg, expr) \
-    do {                           \
-        if ((expr) == 0) {         \
-            return msg;            \
-        }                          \
+#define MIN_UNIT_ASSERT(msg, expr)                 \
+    do {                                           \
+        if ((expr) == 0) {                         \
+            return "*ABORT* " HERE_STRING " " msg; \
+        }                                          \
     } while (0)
 
 #define MIN_UNIT_RUN(func_name)          \
@@ -29,19 +30,19 @@ static int minunit_test_counter;
         }                                \
     } while (0)
 
-#define MIN_UNIT_RUN_ALL(func_name)                                      \
-    do {                                                                 \
-        char const *result = (func_name)();                              \
-                                                                         \
-        if (result != NULL) {                                            \
-            printf("%s\n", result);                                      \
-        } else {                                                         \
-            printf("==ALL TESTS PASSED==\n");                            \
-        }                                                                \
-                                                                         \
-        printf("The number of passed test: %d\n", minunit_test_counter); \
-                                                                         \
-        return result != NULL;                                           \
+#define MIN_UNIT_RUN_ALL(func_name)                               \
+    do {                                                          \
+        char const *result = (func_name)();                       \
+                                                                  \
+        if (result != NULL) {                                     \
+            printf("%s\n", result);                               \
+        } else {                                                  \
+            printf("==ALL TESTS PASSED==\n");                     \
+        }                                                         \
+                                                                  \
+        printf("The number of test: %d\n", minunit_test_counter); \
+                                                                  \
+        return result != NULL;                                    \
     } while (0)
 
 

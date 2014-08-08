@@ -161,7 +161,7 @@ static char const* test_list_manip(void) {
 
 
 static char const* sample_str_data[] = {"Apple", "Orange", "Banana", "Lemon", "Lime", "Strawberry"};
-#define STR_NUM (sizeof(sample_str_data) / sizeof(sample_str_data[0]))
+#define STR_NUM ARRAY_SIZE_OF(sample_str_data)
 
 
 static inline bool echo_str(void* d) {

@@ -15,10 +15,18 @@ MAKEFILE 	:= Makefile
 .PHONY: test
 test: $(MAKEFILE)
 	$(MAKE) dlist
+	$(MAKE) aqueue
 
 
 .PHONY: dlist
 dlist: $(MAKEFILE) ../dlist.c ./test_dlist.c
+	$(CC) ../$@.c ./test_$@.c -o $@.o
+	@echo ''
+	./$@.o
+	@echo ''
+
+.PHONY: aqueue
+aqueue: $(MAKEFILE) ../aqueue.c ./test_aqueue.c
 	$(CC) ../$@.c ./test_$@.c -o $@.o
 	@echo ''
 	./$@.o

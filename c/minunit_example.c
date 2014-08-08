@@ -1,9 +1,8 @@
-#include <stdio.h>
 #include "minunit.h"
 
 
-int foo = 7;
-int bar = 4;
+static int foo = 7;
+static int bar = 5;
 
 
 static char const *test_foo() {
@@ -19,22 +18,12 @@ static char const *test_bar() {
 
 
 static char const *all_tests() {
-    MIN_UNIT_RUN_TEST(test_foo);
-    MIN_UNIT_RUN_TEST(test_bar);
+    MIN_UNIT_RUN(test_foo);
+    MIN_UNIT_RUN(test_bar);
     return NULL;
 }
 
 
 int main(void) {
-    char const *result = all_tests();
-
-    if (result != NULL) {
-        printf("%s\n", result);
-    } else {
-        printf("ALL TESTS PASSED\n");
-    }
-
-    printf("The number of test: %d\n", minunit_test_counter);
-
-    return result != NULL;
+    MIN_UNIT_RUN_ALL(all_tests);
 }

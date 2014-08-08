@@ -6,6 +6,10 @@
 #define _MIN_UNIT_H_
 
 
+
+#include <stdio.h>
+
+
 static int minunit_test_counter;
 
 
@@ -16,14 +20,28 @@ static int minunit_test_counter;
         }                          \
     } while (0)
 
-
-#define MIN_UNIT_RUN_TEST(func_name)     \
+#define MIN_UNIT_RUN(func_name)          \
     do {                                 \
         char const *msg = (func_name)(); \
         minunit_test_counter++;          \
         if (msg != NULL) {               \
             return msg;                  \
         }                                \
+    } while (0)
+
+#define MIN_UNIT_RUN_ALL(func_name)                                      \
+    do {                                                                 \
+        char const *result = (func_name)();                              \
+                                                                         \
+        if (result != NULL) {                                            \
+            printf("%s\n", result);                                      \
+        } else {                                                         \
+            printf("==ALL TESTS PASSED==\n");                            \
+        }                                                                \
+                                                                         \
+        printf("The number of passed test: %d\n", minunit_test_counter); \
+                                                                         \
+        return result != NULL;                                           \
     } while (0)
 
 

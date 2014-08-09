@@ -13,12 +13,19 @@
 
 #include "dlist.h"
 
+
 struct lqueue {
     Dlist* list;
 };
 typedef struct lqueue Lqueue;
 
-extern Lqueue* lqueue_init(Lqueue*, size_t, release_func);
+/*
+ * free function for list node.
+ * It is used in list_destruct().
+ */
+typedef void (*lqueue_release_func)(struct lqueue*, void*);
+
+extern Lqueue* lqueue_init(Lqueue*, size_t, lqueue_release_func);
 extern bool lqueue_is_empty(Lqueue const*);
 extern void* lqueue_get_first(Lqueue*);
 extern void lqueue_delete_first(Lqueue*);

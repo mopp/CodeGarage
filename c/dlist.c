@@ -32,7 +32,7 @@ static void default_free(Dlist* l, void* d) {
  * @param f Pointer to function for release data in list.
  * @return Pointer to list.
  */
-Dlist* dlist_init(Dlist* l, size_t size, release_func f) {
+Dlist* dlist_init(Dlist* l, size_t size, dlist_release_func f) {
     l->node = NULL;
     l->free = (f == NULL) ? (default_free) : (f);
     l->size = 0;
@@ -318,7 +318,7 @@ size_t dlist_get_size(Dlist const* l) {
  * @param is_reverse Loop direction flag. if it is true, loop is first to last.
  * @return Pointer to node when loop stoped or NULL.
  */
-Dlist_node* dlist_node_for_each(Dlist* const l, Dlist_node* n, for_each_func const f, bool const is_reverse) {
+Dlist_node* dlist_node_for_each(Dlist* const l, Dlist_node* n, dlist_for_each_func const f, bool const is_reverse) {
     assert(f != NULL);
 
     if (l->node == NULL) {
@@ -350,7 +350,7 @@ Dlist_node* dlist_node_for_each(Dlist* const l, Dlist_node* n, for_each_func con
  * @param is_reverse Loop direction flag. if it is true, loop is first to last.
  * @return Pointer to node when loop stoped or NULL.
  */
-Dlist_node* dlist_for_each(Dlist* const l, for_each_func const f, bool const is_reverse) {
+Dlist_node* dlist_for_each(Dlist* const l, dlist_for_each_func const f, bool const is_reverse) {
     assert(f != NULL);
     return dlist_node_for_each(l, ((true == is_reverse) ? l->node->prev : l->node), f, is_reverse);
 }

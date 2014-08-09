@@ -13,7 +13,7 @@ static char const* test_words[] = {"Apple", "Orange", "Banana", "Lemon", "Lime",
 static int const check_size = MAX_SIZE;
 
 
-static void release_str(Dlist* q, void* d) {
+static void release_str(Lqueue* q, void* d) {
     free(d);
 }
 

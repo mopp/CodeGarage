@@ -11,12 +11,12 @@
 #include "lqueue.h"
 
 
-Lqueue* lqueue_init(Lqueue* q, size_t size, release_func f) {
+Lqueue* lqueue_init(Lqueue* q, size_t size, lqueue_release_func f) {
     assert(q != NULL);
 
     q->list = (Dlist*)malloc(sizeof(Dlist));
 
-    dlist_init(q->list, size, f);
+    dlist_init(q->list, size, (dlist_release_func)f);
 
     return q;
 }

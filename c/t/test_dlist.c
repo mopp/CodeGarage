@@ -210,11 +210,57 @@ static char const* test_pointer_list(void) {
 }
 
 
+static void release_str_no_assert(Dlist* l, void* d) {
+    free(d);
+}
+
+
+static bool for_each_str_no_assert(Dlist* l, void* d) {
+    echo_str(d);
+    return false;
+}
+
+
+static char const* test_swap(void) {
+    Dlist l;
+
+    dlist_init(&l, sizeof(char*), release_str_no_assert);
+    for (int i = 0; i < STR_NUM; i++) {
+        /* NOTE: sample_str_data[i] is char "const" *, NOT char* */
+        dlist_insert_data_last(&l, &sample_str_data[i]);
+    }
+
+    printf("Before swap - first -> ");
+    dlist_for_each(&l, for_each_str_no_assert, false);
+    puts("last");
+    MIN_UNIT_ASSERT("list element num is wrong", dlist_get_size(&l) == STR_NUM);
+
+
+    void const * t = l.node->data;
+    dlist_swap_data(l.node, l.node->prev);
+    MIN_UNIT_ASSERT("dlist_swap_data is wrong.", t == l.node->prev->data);
+    t = l.node->next->data;
+    dlist_swap_data(l.node->next, l.node->prev->prev->prev);
+    MIN_UNIT_ASSERT("dlist_swap_data is wrong.", t == l.node->prev->prev->prev->data);
+
+
+    printf("After  swap - first -> ");
+    dlist_for_each(&l, for_each_str_no_assert, false);
+    puts("last");
+    MIN_UNIT_ASSERT("list element num is wrong", dlist_get_size(&l) == STR_NUM);
+
+    dlist_destruct(&l);
+
+    return NULL;
+}
+
+
 static char const* all_tests(void) {
     MIN_UNIT_RUN(test_list_create_destruct);
     MIN_UNIT_RUN(test_int_list);
     MIN_UNIT_RUN(test_list_manip);
     MIN_UNIT_RUN(test_pointer_list);
+    MIN_UNIT_RUN(test_swap);
 
     return NULL;
 }

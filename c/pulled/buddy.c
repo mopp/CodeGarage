@@ -1,256 +1,214 @@
 /*
+ * BUDDY SYSTEM CODE
  * http://www.sourcecodesworld.com/source/show.asp?ScriptID=1077
- *                       BUDDY SYSTEM CODE
  */
-
-#include<stdio.h>
-#include<conio.h>
-int tree[2050],i,j,k;
-void
-segmentalloc(int,int),makedivided(int),makefree(int),printing(int,int);
-int place(int),power(int,int);
-main()
-{
-	int totsize,cho,req;
-	clrscr();
-	for(i=0;i<80;i++) printf("%c",5);
-	printf("
-		    B U D D Y   S Y S T E M  R E Q U I R E M E N T
-S
-
-");
-	for(i=0;i<80;i++) printf("%c",5);
-	printf("
-	*  Enter the Size of the memory  :  ");
-	scanf("%d",&totsize);
-	clrscr();
-	while(1)
-	{
-		for(i=0;i<80;i++) printf("%c",5);
-		printf("
-			     B U D D Y   S Y S T E M
-
-");
-		for(i=0;i<80;i++) printf("%c",5);
-		printf("
-
-	*  1)   Locate the process into the Memory
-");
-		printf("
-	*  2)   Remove the process from Memory
-");
-		printf("
-	*  3)   Tree structure for Memory allocation Map
-");
-		printf("
-	*  4)   Exit
+#include <stdio.h>
 
 
-");
-		for(i=0;i<80;i++) printf("%c",5);
-		printf("
+static void segmentalloc(int, int);
+static void makedivided(int);
+static void makefree(int);
+static void printing(int, int);
+static int place(int);
+static int power_2(int);
+static void frame(int);
+static void frame_echo(char const* const);
+static int mod2(int);
+static int div2(int);
 
-	*  Enter your choice  :  ");
-		scanf("%d",&cho);
-		switch(cho)
-		{
-			case 1:
-				clrscr();
-				printf("
-");
-				for(i=0;i<80;i++) printf("%c",5);
-				printf("
-");
-				printf("			M E M O R Y   A L L O C A T I O N
+static int tree[2050];
+static char const* frame_str = "================================================================================";
 
-");
-				for(i=0;i<80;i++) printf("%c",5);
-				printf("
 
-	*  Enter the Process size  : ");
-				scanf("%d",&req);
-				segmentalloc(totsize,req);
-				break;
-			case 2:
-				clrscr();
-				printf("
-");
-				for(i=0;i<80;i++) printf("%c",5);
-				printf("
-");
-				printf("			M E M O R Y   D E A L L O C A T I O N
 
-");
-				for(i=0;i<80;i++) printf("%c",5);
-				printf("
+int main(void) {
+    int total_size, choice, request_size;
 
-	*  Enter the process size  :  ");
-				scanf("%d",&req);
-				makefree(req);
-				break;
-			case 3:
-				clrscr();
-				printf("
-");
-				for(i=0;i<80;i++) printf("%c",5);
-				printf("
-			M E M O R Y   A L L O C A T I O N   M A
-    P
+    frame_echo("\tB U D D Y   S Y S T E M  R E Q U I R E M E N T S");
 
-");
-				for(i=0;i<80;i++) printf("%c",5);
-				printf("
+    printf("*  Enter the Size of the memory  :  ");
 
-");
-				printing(totsize,0);
-				printf("
+    scanf("%d", &total_size);
 
-");
-				for(i=0;i<80;i++) printf("%c",5);
-				getch();
-				clrscr();
-				break;
-			default:
-				return;
-		}
-	}
+    while (1) {
+        frame_echo("\tB U D D Y   S Y S T E M ");
+        puts(" *  1)\tLocate the process into the Memory");
+        puts(" *  2)\tRemove the process from Memory");
+        puts(" *  3)\tTree structure for Memory allocation Map");
+        puts(" *  4)\tExit");
+        printf(" *  Enter your choice : ");
+
+        scanf(" %d", &choice);
+
+        switch (choice) {
+            case 1:
+                frame_echo("\tM E M O R Y   A L L O C A T I O N ");
+                printf(" *  Enter the Process size  : ");
+
+                scanf("%d", &request_size);
+
+                segmentalloc(total_size, request_size);
+
+                break;
+            case 2:
+                frame_echo("\tM E M O R Y   D E A L L O C A T I O N ");
+                printf(" *  Enter the process size  :  ");
+
+                scanf("%d", &request_size);
+
+                makefree(request_size);
+
+                break;
+            case 3:
+                frame_echo("\tM E M O R Y   A L L O C A T I O N   M A P ");
+
+                printing(total_size, 0);
+
+                putchar('\n');
+
+                break;
+            default:
+                return 0;
+        }
+    }
 }
 
-void segmentalloc(int totsize,int request)
-{
-",2);
-		printf("
-	*  The system don't have enough free memory
-");
-		printf("
-	*  Suggession  :  Go for VIRTUAL MEMORY
 
-");
-		getch();
-		return;
-	}
-	while(1)
-	{
-		if(request<size && request>(size/2))
-			break;
-		else
-		{
-			size/=2;
-			flevel++;
-		}
-	}
-	for(i=power(2,flevel)-1;i<=(power(2,flevel+1)-2);i++)
-		if(tree[i]==0 && place(i))
-		{
-			tree[i]=request;
-			makedivided(i);
-			printf("
-
-	 Result    :     Successful Allocation
-
-");
-			break;
-		}
-	if(i==power(2,flevel+1)-1)
-	{
-		printf("	%c    Result  :  ");
-		printf("
-	*  The system don't have enough free memory
-
-");
-		printf("
-	*  Suggession  :  Go for VIRTUAL Memory Mode
-
-");
-	}
+static inline void frame(int is_newline) {
+    printf("%s%c", frame_str, (is_newline != 0 ? '\n' : ' '));
 }
 
-void makedivided(int node)
-{
-	while(node!=0)
-	{
-		node=node%2==0?(node-1)/2:node/2;
-		tree[node]=1;
-	}
+
+static inline void frame_echo(char const* const str) {
+    frame(1);
+    puts(str);
+    frame(1);
 }
 
-int place(int node)
-{
-	while(node!=0)
-	{
-		node=node%2==0?(node-1)/2:node/2;
-		if(tree[node]>1)
-			return 0;
-	}
-	return 1;
+
+static inline void segmentalloc(int total_size, int request) {
+    int i, flevel = 0, size = total_size;
+
+    if (total_size < request) {
+        puts(" *  Result:");
+        puts(" *  The system don't have enough free memory");
+        puts(" *  Suggession  :  Go for VIRTUAL MEMORY");
+
+        return;
+    }
+
+    while (1) {
+        if (request <= size && div2(size) < request) {
+            break;
+        } else {
+            size = div2(size);
+            flevel++;
+        }
+    }
+
+    for (i = power_2(flevel) - 1; i <= (power_2(flevel + 1) - 2); i++) {
+        if (tree[i] == 0 && place(i)) {
+            tree[i] = request;
+            makedivided(i);
+            puts(" *  Result : Successful Allocation");
+            break;
+        }
+    }
+
+    if (i == power_2(flevel + 1) - 1) {
+        puts(" *  Result :");
+        puts(" *  The system don't have enough free memory");
+        puts(" *  Suggession : Go for VIRTUAL Memory Mode");
+    }
 }
 
-void makefree(int request)
-{
-	int node=0;
-	while(1)
-	{
-		if(tree[node]==request)
-			break;
-		else
-			node++;
-	}
-	tree[node]=0;
-	while(node!=0)
-	{
-		if(tree[node%2==0?node-1:node+1]==0 && tree[node]==0)
-		{
-			tree[node%2==0?(node-1)/2:node/2]=0;
-			node=node%2==0?(node-1)/2:node/2;
-		}
-		else break;
-	}
+
+static inline void makedivided(int node) {
+    while (node != 0) {
+        node = (mod2(node) == 0) ? div2(node - 1) : div2(node);
+        tree[node] = 1;
+    }
 }
 
-int power(int x,int y)
-{
-	int z,ans;
-	if(y==0) return 1;
-	ans=x;
-	for(z=1;z<y;z++)
-		ans*=x;
-	return ans;
+
+static inline int place(int node) {
+    while (node != 0) {
+        node = (mod2(node) == 0) ? div2(node - 1) : div2(node);
+        if (1 < tree[node]) {
+            return 0;
+        }
+    }
+
+    return 1;
 }
 
-void printing(int totsize,int node)
-{
-	int permission=0,llimit,ulimit,tab;
-	if(node==0)
-		permission=1;
-	else if(node%2==0)
-		permission=tree[(node-1)/2]==1?1:0;
-	else
-		permission=tree[node/2]==1?1:0;
-	if(permission)
-	{
-		llimit=ulimit=tab=0;
-		while(1)
-		{
-			if(node>=llimit && node<=ulimit)
-				break;
-			else
-			{
-				tab++;
-				printf("       ");
-				llimit=ulimit+1;
-				ulimit=2*ulimit+2;
-			}
-		}
-		printf(" %d ",totsize/power(2,tab));
-		if(tree[node]>1)
-			printf("---> Allocated %d
-",tree[node]);
-		else if(tree[node]==1)
-			printf("---> Divided
-");
-		else printf("---> Free
-");
-		printing(totsize,2*node+1);
-		printing(totsize,2*node+2);
-	}
+
+static inline void makefree(int request) {
+    int node = 0;
+
+    while (tree[node] != request) {
+        node++;
+    }
+
+    tree[node] = 0;
+    while (node != 0) {
+        if ((tree[(mod2(node) == 0) ? node - 1 : node + 1] == 0) && tree[node] == 0) {
+            tree[(mod2(node) == 0) ? div2(node - 1) : div2(node)] = 0;
+            node = (mod2(node) == 0) ? div2(node - 1) : div2(node);
+        } else {
+            break;
+        }
+    }
+}
+
+
+static inline int power_2(int n) {
+    return (n == 0) ? (1) : (2 << (n - 1));
+}
+
+
+static inline void printing(int total_size, int node) {
+    int permission = 0, llimit, ulimit, tab;
+
+    if (node == 0) {
+        permission = 1;
+    } else if (mod2(node) == 0) {
+        permission = (tree[div2(node - 1)] == 1) ? 1 : 0;
+    } else {
+        permission = (tree[div2(node)] == 1) ? 1 : 0;
+    }
+
+    if (permission) {
+        llimit = ulimit = tab = 0;
+
+        while (!(llimit <= node && node <= ulimit)) {
+            tab++;
+            putchar('\t');
+            llimit = ulimit + 1;
+            ulimit = 2 * ulimit + 2;
+        }
+
+        printf(" %d ", total_size / power_2(tab));
+
+        if (1 < tree[node]) {
+            printf("---> Allocated %d\n", tree[node]);
+        } else if (tree[node] == 1) {
+            printf("---> Divided\n");
+        } else {
+            printf("---> Free\n");
+        }
+
+        printing(total_size, 2 * node + 1);
+        printing(total_size, 2 * node + 2);
+    }
+}
+
+
+static inline int mod2(int x) {
+    return x & 0x1;
+}
+
+
+static inline int div2(int x) {
+    return x >> 0x1;
 }

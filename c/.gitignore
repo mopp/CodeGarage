@@ -3,6 +3,7 @@
 
 # allow directors
 !t
+!pulled
 
 # allow files
 !.gitignore

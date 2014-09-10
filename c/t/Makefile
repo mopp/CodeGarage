@@ -17,6 +17,7 @@ test: $(MAKEFILE)
 	$(MAKE) dlist
 	$(MAKE) aqueue
 	$(MAKE) lqueue
+	$(MAKE) memory_dump
 
 
 .PHONY: dlist
@@ -40,6 +41,12 @@ lqueue: $(MAKEFILE) ../dlist.c ../lqueue.c ./test_lqueue.c
 	./$@.o
 	@echo ''
 
+.PHONY: memory_dump
+memory_dump: $(MAKEFILE) ../memory_dump.c  ./test_memory_dump.c
+	$(CC) ../$@.c ./test_$@.c -o $@.o
+	@echo ''
+	./$@.o
+	@echo ''
 
 .PHONY: clean
 clean:

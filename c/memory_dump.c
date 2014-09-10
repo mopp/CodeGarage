@@ -5,8 +5,8 @@
  * @version 0.1
  * @date 2014-04-24
  */
-#include <stdint.h>
-#include <stdio.h>
+#include "memory_dump.h"
+
 
 #define BASE 16
 #define MOD_16(x) (x & 0x0F)
@@ -42,13 +42,4 @@ void dump_memory_hex(uintptr_t const buf, size_t const size) {
         ascii[t] = '\0';
         printf("%*c |%s\n", (BASE - t) * 3, ' ', ascii);
     }
-}
-
-
-int main(void) {
-    uint32_t i = 0xFFFFFFFF;
-
-    dump_memory_hex((uintptr_t)(&i), 100);
-
-    return 0;
 }

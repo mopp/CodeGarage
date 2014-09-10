@@ -57,11 +57,13 @@ static char const* test_lqueue(void) {
     return NULL;
 }
 
+
 static char const* all_tests(void) {
     MIN_UNIT_RUN(test_lqueue);
 
     return NULL;
 }
+
 
 int main(void) {
     MIN_UNIT_RUN_ALL(all_tests);

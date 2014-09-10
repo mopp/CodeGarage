@@ -55,7 +55,7 @@ static char const* test_aqueue(void) {
 
     printf("All Test Passed.\n");
 
-    return 0;
+    return NULL;
 }
 
 

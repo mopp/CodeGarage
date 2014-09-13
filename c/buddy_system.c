@@ -16,8 +16,8 @@
 /* Order in buddy system: 0 1 2 3  4  5  6   7   8   9   10 */
 #define BUDDY_SYSTEM_MAX_ORDER 11
 
-#define FRAME_SIZE 0x1000                        /* frame size is 4 KB. */
-#define MAX_MEMORY_SIZE (4 * 1024 * 1024 * 1024) /* max memory size of x86_32 is 4GB */
+#define FRAME_SIZE 0x1000U                        /* frame size is 4 KB. */
+#define MAX_MEMORY_SIZE (0xffffffffU) /* max memory size of x86_32 is 4GB */
 
 
 typedef struct elist {
@@ -41,7 +41,8 @@ enum frame_constants {
 
 
 struct buddy_manager {
-    Frame frames[BUDDY_SYSTEM_MAX_ORDER];
+    Frame* frame_pool;
+    Frame* frames[BUDDY_SYSTEM_MAX_ORDER];
     uint32_t free_page_nr[BUDDY_SYSTEM_MAX_ORDER];
     uint32_t free_memory_size;
     uint32_t alloc_memory_size;
@@ -72,17 +73,43 @@ static inline Elist* elist_insert_prev(Elist* l, Elist* new) {
 }
 
 
-Buddy_manager* init_buddy_system(Buddy_manager* bman, Frame const* const frame, uint32_t frame_nr) {
+static inline Elist* elist_remove(Elist* n) {
+    Elist* next = n->next;
+    Elist* prev = n->prev;
+    prev->next = next;
+    next->prev = prev;
+
+    return n;
+}
+
+
+Buddy_manager* init_buddy_system(Buddy_manager* bman, uint32_t memory_size) {
+    uint32_t const frame_nr = memory_size / FRAME_SIZE;
+    Frame* const frames = malloc(sizeof(Frame) * frame_nr);
+    memset(frames, 0, sizeof(Frame) * frame_nr);
+    if (frames == NULL) {
+        return NULL;
+    }
+
     bman->free_memory_size  = 0;
     bman->alloc_memory_size = 0;
     for (int i = 0; i < BUDDY_SYSTEM_MAX_ORDER; ++i) {
-        elist_init(&bman->frames[i].list);
+        elist_init(&bman->frames[i]->list);
         bman->free_page_nr[i] = 0;
     }
 
     uint32_t max_size = frame_nr * FRAME_SIZE;
+    printf("max_size = %u KB\n", max_size / 1024);
+    printf("frame_nr = %u\n", frame_nr);
     for (int i = BUDDY_SYSTEM_MAX_ORDER - 1; 0 <= i; --i) {
-        bman->frames[i];
+        uint32_t order_size = (1 << i);
+        int cnt = 0;
+        while (order_size <= frame_nr) {
+            frame_nr -= order_size;
+            ++cnt;
+        }
+        printf("order = %2u ", i);
+        printf("order size = %4u - %d\n", order_size, cnt);
     }
 
     return bman;
@@ -90,17 +117,8 @@ Buddy_manager* init_buddy_system(Buddy_manager* bman, Frame const* const frame, 
 
 
 int main(void) {
-    uint32_t const frame_nr = MAX_MEMORY_SIZE / FRAME_SIZE;
-    Frame* const frames = malloc(sizeof(Frame) * frame_nr);
-    memset(frames, 0, sizeof(Frame) * frame_nr);
-    if (frames == NULL) {
-        return EXIT_FAILURE;
-    }
-
     Buddy_manager bman;
-    /* init_buddy_system(&bman, MAX_MEMORY_SIZE); */
-
-    free(frames);
+    init_buddy_system(&bman, MAX_MEMORY_SIZE);
 
     return EXIT_SUCCESS;
 }

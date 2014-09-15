@@ -5,19 +5,19 @@ static int foo = 7;
 static int bar = 5;
 
 
-static char const *test_foo() {
+static char const *test_foo(void) {
     MIN_UNIT_ASSERT("ERROR: foo != 7", foo == 7);
     return NULL;
 }
 
 
-static char const *test_bar() {
+static char const *test_bar(void) {
     MIN_UNIT_ASSERT("ERROR: bar != 5", bar == 5);
     return NULL;
 }
 
 
-static char const *all_tests() {
+static char const *all_tests(void) {
     MIN_UNIT_RUN(test_foo);
     MIN_UNIT_RUN(test_bar);
     return NULL;

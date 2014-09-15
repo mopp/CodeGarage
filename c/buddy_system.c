@@ -5,19 +5,24 @@
  * @version 0.1
  * @date 2014-09-10
  */
+
+#include <assert.h>
+#include <stdbool.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <stdint.h>
-#include <stdalign.h>
 #include <string.h>
+#include "minunit.h"
 
 
 /* The number of frame  : 1 2 4 8 16 32 64 128 256 512 1024 */
 /* Order in buddy system: 0 1 2 3  4  5  6   7   8   9   10 */
 #define BUDDY_SYSTEM_MAX_ORDER 11
 
-#define FRAME_SIZE 0x1000U                        /* frame size is 4 KB. */
-#define MAX_MEMORY_SIZE (0xffffffffU) /* max memory size of x86_32 is 4GB */
+#define FRAME_SIZE 0x1000U /* frame size is 4 KB. */
+// #define MAX_MEMORY_SIZE (0xffffffffU) /* max memory size of x86_32 is 4GB */
+#define MAX_MEMORY_SIZE (1024 * 1024) /* max memory size of x86_32 is 4GB */
+// 1MB
 
 
 typedef struct elist {
@@ -29,7 +34,7 @@ typedef struct elist {
 struct frame {
     Elist list;
     uint8_t status;
-    uint8_t exponent;
+    uint8_t order;
 };
 typedef struct frame Frame;
 
@@ -42,10 +47,11 @@ enum frame_constants {
 
 struct buddy_manager {
     Frame* frame_pool;
-    Frame* frames[BUDDY_SYSTEM_MAX_ORDER];
-    uint32_t free_page_nr[BUDDY_SYSTEM_MAX_ORDER];
-    uint32_t free_memory_size;
-    uint32_t alloc_memory_size;
+    Elist* frames[BUDDY_SYSTEM_MAX_ORDER];
+    size_t free_page_nr[BUDDY_SYSTEM_MAX_ORDER];
+    size_t total_frame_nr;
+    size_t free_memory_size;
+    size_t alloc_memory_size;
 };
 typedef struct buddy_manager Buddy_manager;
 
@@ -83,42 +89,159 @@ static inline Elist* elist_remove(Elist* n) {
 }
 
 
+static inline bool elist_is_empty(Elist* n) {
+    return NULL == n;
+}
+
+
+static inline size_t get_frame_idx(Buddy_manager const* const bman, Frame const* const frame) {
+    assert(bman != NULL);
+    assert(frame != NULL);
+    return ((uintptr_t)frame - (uintptr_t)bman->frame_pool) / sizeof(Frame);
+}
+
+
+static inline uintptr_t get_frame_addr(Buddy_manager const* const bman, Frame const* const frame) {
+    assert(bman != NULL);
+    assert(frame != NULL);
+    return get_frame_idx(bman, frame) * FRAME_SIZE;
+}
+
+
+static inline uintptr_t get_frame_addr_by_idx(Buddy_manager const* const bman, size_t idx) {
+    assert(bman != NULL);
+    assert(idx <= bman->total_frame_nr);
+    return get_frame_addr(bman, &bman->frame_pool[idx]);
+}
+
+/*
+ * バディは2の累乗であることを利用する
+ * xor は そのビットが1であれば0に、0であれば1にする
+ * つまり、アドレスの小さいバディであれば足し、大きいバディであれば引くという処理になる.
+ * オーダーが1の時、要素0番のバディは要素2番
+ * 0 + (1 << 1) = 2
+ */
+static inline Frame* get_buddy_frame_by_idx(Buddy_manager const* const bman, size_t idx, uint8_t order) {
+    return bman->frame_pool + (idx ^ (1 << order));
+}
+
+
+static inline Frame* get_buddy_frame(Buddy_manager const* const bman, Frame const * const frame, uint8_t order) {
+    return get_buddy_frame_by_idx(bman, get_frame_idx(bman, frame), order);
+}
+
+
+static inline bool is_frame_your_buddy(Frame const * const you, Frame const * const buddy) {
+    return you->order == buddy->order;
+}
+
+
 Buddy_manager* init_buddy_system(Buddy_manager* bman, uint32_t memory_size) {
-    uint32_t const frame_nr = memory_size / FRAME_SIZE;
-    Frame* const frames = malloc(sizeof(Frame) * frame_nr);
-    memset(frames, 0, sizeof(Frame) * frame_nr);
+    assert(bman != NULL);
+    assert(memory_size != 0);
+
+    size_t frame_nr = memory_size / FRAME_SIZE;
+    assert(frame_nr != 0);
+    
+    printf("memory_size = %uKB\n", memory_size / 1024);
+    printf("frame_nr    = %lu\n", frame_nr);
+
+    Frame* frames = malloc(sizeof(Frame) * frame_nr);
     if (frames == NULL) {
         return NULL;
     }
 
-    bman->free_memory_size  = 0;
+    bman->frame_pool        = frames;
+    bman->total_frame_nr    = frame_nr;
+    bman->free_memory_size  = memory_size;
     bman->alloc_memory_size = 0;
-    for (int i = 0; i < BUDDY_SYSTEM_MAX_ORDER; ++i) {
-        elist_init(&bman->frames[i]->list);
+    bman->free_page_nr[0]   = frame_nr;
+    for (uint8_t i = 1; i < BUDDY_SYSTEM_MAX_ORDER; ++i) {
         bman->free_page_nr[i] = 0;
     }
 
-    uint32_t max_size = frame_nr * FRAME_SIZE;
-    printf("max_size = %u KB\n", max_size / 1024);
-    printf("frame_nr = %u\n", frame_nr);
-    for (int i = BUDDY_SYSTEM_MAX_ORDER - 1; 0 <= i; --i) {
-        uint32_t order_size = (1 << i);
-        int cnt = 0;
-        while (order_size <= frame_nr) {
-            frame_nr -= order_size;
-            ++cnt;
-        }
-        printf("order = %2u ", i);
-        printf("order size = %4u - %d\n", order_size, cnt);
+    Frame* itr;
+    Frame* const end = frames + frame_nr;
+
+    for (uint8_t i = 0; i < BUDDY_SYSTEM_MAX_ORDER; ++i) {
+        itr = frames;
+        do {
+            Frame* bf = get_buddy_frame(bman, itr, i);
+            itr->order = bf->order = i;
+            itr = bf;
+        } while (++itr <= end);
     }
+
+    itr = frames;
+    do {
+        printf("%02d ", itr->order);
+    } while (++itr <= end);
+    putchar('\n');
+    /* [0] [0] [0] [0] [0] [0] [0] [0] [0] [0]  */
+    /* [1 1] [1 1] [1 1] [1 1] [1 1] [0]  */
+    /* [2 2 2 2] [2 2 2 2] [0 0] [0]  */
+    /* [3 3 3 3 3 3 3 3] [0 0] [0]  */
+
+    return bman;
+
+    bman->frames[0]   = &frames[0].list;
+    elist_init(bman->frames[0]);
+    while (++frames < end) {
+        elist_insert_prev(bman->frames[0], &frames->list);
+    }
+
+    printf("%lu\n", get_frame_addr(bman, bman->frame_pool + 1));
 
     return bman;
 }
 
 
-int main(void) {
+static char const* test_get_frame_addr(void) {
     Buddy_manager bman;
-    init_buddy_system(&bman, MAX_MEMORY_SIZE);
+    bman.frame_pool = malloc(sizeof(Frame) * 10);
+
+    MIN_UNIT_ASSERT("ERROR: get_frame_addr is wrong.", 0 == get_frame_addr(&bman, bman.frame_pool));
+    MIN_UNIT_ASSERT("ERROR: get_frame_addr is wrong.", FRAME_SIZE == get_frame_addr(&bman, bman.frame_pool + 1));
+    MIN_UNIT_ASSERT("ERROR: get_frame_addr is wrong.", FRAME_SIZE * 10 == get_frame_addr(&bman, bman.frame_pool + 10));
+
+    return NULL;
+}
+
+
+static char const* test_get_buddy_frame(void) {
+    Buddy_manager bman;
+    bman.frame_pool = malloc(sizeof(Frame) * 256);
+
+    MIN_UNIT_ASSERT("ERROR: get_buddy_frame is wrong.", &bman.frame_pool[1] == get_buddy_frame(&bman, &bman.frame_pool[0], 0));
+    MIN_UNIT_ASSERT("ERROR: get_buddy_frame is wrong.", &bman.frame_pool[0] == get_buddy_frame(&bman, &bman.frame_pool[1], 0));
+    MIN_UNIT_ASSERT("ERROR: get_buddy_frame is wrong.", &bman.frame_pool[2] == get_buddy_frame(&bman, &bman.frame_pool[0], 1));
+    MIN_UNIT_ASSERT("ERROR: get_buddy_frame is wrong.", &bman.frame_pool[8] == get_buddy_frame(&bman, &bman.frame_pool[0], 3));
+
+    return NULL;
+}
+
+
+static char const* all_tests(void) {
+    MIN_UNIT_RUN(test_get_frame_addr);
+    MIN_UNIT_RUN(test_get_buddy_frame);
+    return NULL;
+}
+
+
+int do_all_tests(void) {
+    MIN_UNIT_RUN_ALL(all_tests);
+}
+
+
+int main(void) {
+    do_all_tests();
+    printf("============================================================\n");
+
+    Buddy_manager bman;
+
+    if (init_buddy_system(&bman, FRAME_SIZE * 10) == NULL) {
+        return EXIT_FAILURE;
+    }
 
     return EXIT_SUCCESS;
 }

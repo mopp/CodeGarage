@@ -17,13 +17,10 @@
 
 /* The number of frame  : 1 2 4 8 16 32 64 128 256 512 1024 */
 /* Order in buddy system: 0 1 2 3  4  5  6   7   8   9   10 */
-#define BUDDY_SYSTEM_MAX_ORDER 11
+#define BUDDY_SYSTEM_MAX_ORDER (10 + 1)
+#define BUDDY_SYSTEM_ORDER_NR(order) (1U << (order))
 
 #define FRAME_SIZE 0x1000U /* frame size is 4 KB. */
-// #define MAX_MEMORY_SIZE (0xffffffffU) /* max memory size of x86_32 is 4GB */
-#define MAX_MEMORY_SIZE (1024 * 1024) /* max memory size of x86_32 is 4GB */
-// 1MB
-
 
 typedef struct elist {
     struct elist* next;
@@ -48,10 +45,8 @@ enum frame_constants {
 struct buddy_manager {
     Frame* frame_pool;
     Elist frames[BUDDY_SYSTEM_MAX_ORDER]; /* This list is dummy. actually element is after list->next. */
-    size_t free_page_nr[BUDDY_SYSTEM_MAX_ORDER];
+    size_t free_frame_nr[BUDDY_SYSTEM_MAX_ORDER];
     size_t total_frame_nr;
-    size_t free_memory_size;
-    size_t alloc_memory_size;
 };
 typedef struct buddy_manager Buddy_manager;
 
@@ -89,18 +84,24 @@ static inline Elist* elist_remove(Elist* n) {
     prev->next = next;
     next->prev = prev;
 
-    return n;
+    return elist_init(n);
 }
 
 
 static inline bool elist_is_empty(Elist* n) {
-    return NULL == n;
+    return (n->next == n->prev) && (n == n->next);
+}
+
+
+static inline Frame* elist_get_frame(Elist const * const l) {
+    return (Frame*)l;
 }
 
 
 static inline size_t get_frame_idx(Buddy_manager const* const bman, Frame const* const frame) {
     assert(bman != NULL);
     assert(frame != NULL);
+    assert((uintptr_t)bman->frame_pool <= (uintptr_t)frame);
     return ((uintptr_t)frame - (uintptr_t)bman->frame_pool) / sizeof(Frame);
 }
 
@@ -112,21 +113,19 @@ static inline uintptr_t get_frame_addr(Buddy_manager const* const bman, Frame co
 }
 
 
-static inline uintptr_t get_frame_addr_by_idx(Buddy_manager const* const bman, size_t idx) {
-    assert(bman != NULL);
-    assert(idx <= bman->total_frame_nr);
-    return get_frame_addr(bman, &bman->frame_pool[idx]);
-}
-
 /*
- * バディは2の累乗であることを利用する
- * xor は そのビットが1であれば0に、0であれば1にする
- * つまり、アドレスの小さいバディであれば足し、大きいバディであれば引くという処理になる.
- * オーダーが1の時、要素0番のバディは要素2番
+ * バディのアドレスが2の累乗であることを利用する.
+ * xor は そのビットが1であれば0に、0であれば1にする.
+ * ---------------------
+ * | Buddy A | Buddy B |
+ * ---------------------
+ * 上図において、Buddy Aなら足して、Buddy Bを求める.
+ * Buddy Bなら引いて、Buddy Aを求めるという処理になる.
+ * オーダーが1の時、要素0番のバディは要素2番である.
  * 0 + (1 << 1) = 2
  */
 static inline Frame* get_buddy_frame_by_idx(Buddy_manager const* const bman, size_t idx, uint8_t order) {
-    return bman->frame_pool + (idx ^ (1 << order));
+    return bman->frame_pool + (idx ^ BUDDY_SYSTEM_ORDER_NR(order));
 }
 
 
@@ -140,69 +139,117 @@ static inline bool is_frame_your_buddy(Frame const * const you, Frame const * co
 }
 
 
-Buddy_manager* init_buddy_system(Buddy_manager* bman, uint32_t memory_size) {
+Buddy_manager* buddy_init(Buddy_manager* const bman, uint32_t memory_size) {
     size_t frame_nr = memory_size / FRAME_SIZE;
 
     assert(bman != NULL);
     assert(memory_size != 0);
     assert(frame_nr != 0);
 
-    printf("memory_size = %uKB\n", memory_size / 1024);
-    printf("frame_nr    = %lu\n", frame_nr);
-
+    // TODO: address check
     Frame* frames = malloc(sizeof(Frame) * frame_nr);
     if (frames == NULL) {
         return NULL;
     }
 
+    printf("frames      = %p\n", frames);
+
     bman->frame_pool        = frames;
     bman->total_frame_nr    = frame_nr;
-    bman->free_memory_size  = memory_size;
-    bman->alloc_memory_size = 0;
-    bman->free_page_nr[0]   = frame_nr;
-    for (uint8_t i = 1; i < BUDDY_SYSTEM_MAX_ORDER; ++i) {
-        bman->free_page_nr[i] = 0;
-    }
-
-    Frame* itr;
-    Frame* const end = frames + frame_nr;
-
     for (uint8_t i = 0; i < BUDDY_SYSTEM_MAX_ORDER; ++i) {
-        itr = frames;
-        do {
-            Frame* bf = get_buddy_frame(bman, itr, i);
-            itr->order = bf->order = i;
-            itr = bf;
-        } while (++itr <= end);
+        bman->free_frame_nr[i] = 0;
+        elist_init(bman->frames + i);
     }
 
-    itr = frames;
+    size_t n = frame_nr;
+    uint8_t order = BUDDY_SYSTEM_MAX_ORDER;
+    Frame* itr = frames;
     do {
-        printf("%02d ", itr->order);
-    } while (++itr <= end);
-    putchar('\n');
+        --order;
+        size_t o_nr = BUDDY_SYSTEM_ORDER_NR(order);
+        while (n != 0 && o_nr <= n) {
+            itr->order = order;
+            itr->status = FRAME_STATE_FREE;
 
-    // elist_foreach(Frame*, itr, bman->frames[0]) {
-    //     printf("%02d ", itr->order);
-    // }
-    // putchar('\n');
+            elist_insert_next(&bman->frames[order], &itr->list);
+            ++(bman->free_frame_nr[order]);
 
-    /* [0] [0] [0] [0] [0] [0] [0] [0] [0] [0]  */
-    /* [1 1] [1 1] [1 1] [1 1] [1 1] [0]  */
-    /* [2 2 2 2] [2 2 2 2] [0 0] [0]  */
-    /* [3 3 3 3 3 3 3 3] [0 0] [0]  */
+            itr += o_nr;    /* 次のフレームへ */
+            n -= o_nr;      /* 取ったフレーム分を引く */
+        }
+    } while (0 < order);
+
+    size_t s = 0;
+    for (size_t i = 0; i < BUDDY_SYSTEM_MAX_ORDER; i++) {
+        elist_foreach(Frame*, itr, bman->frames + i) {
+            s += (FRAME_SIZE * BUDDY_SYSTEM_ORDER_NR(i));
+        }
+    }
+    assert(s == memory_size);
 
     return bman;
+}
 
-    bman->frames[0]   = frames[0].list;
-    elist_init(&bman->frames[0]);
-    while (++frames < end) {
-        elist_insert_prev(&bman->frames[0], &frames->list);
+
+void buddy_destruct(Buddy_manager* const bman) {
+    free(bman->frame_pool);
+    memset(bman, 0, sizeof(Buddy_manager));
+}
+
+
+Frame* buddy_get_frames(Buddy_manager* const bman, uint8_t request_order) {
+    assert(bman != NULL);
+    Elist* frames = bman->frames;
+
+    uint8_t order = request_order;
+    while (order < BUDDY_SYSTEM_MAX_ORDER) {
+        Elist* l = &frames[order];
+        if (elist_is_empty(l) == false) {
+            --bman->free_frame_nr[order];
+            Frame* rm_frame = elist_get_frame(elist_remove(l->next));
+
+            /* 要求オーダーよりも大きいオーダーからフレームを取得した場合、余分なフレームを繋ぎ直す. */
+            while (request_order < order--) {
+                Frame* bf = get_buddy_frame(bman, rm_frame, order); /* 2分割 */
+                elist_insert_next(&frames[order], &bf->list);       /* バディを一つしたのオーダーのリストへ接続 */
+                ++bman->free_frame_nr[order];
+            }
+
+            return rm_frame;
+        }
+        /* requested order is NOT found. */
+
+        ++order;
     }
 
-    printf("%lu\n", get_frame_addr(bman, bman->frame_pool + 1));
+    /* Error */
+    return NULL;
+}
 
-    return bman;
+static inline void print_separator(void) {
+    puts("================================================================================");
+}
+
+
+static inline void buddy_print(Buddy_manager* const bman) {
+    print_separator();
+    printf("Total Memory Size: %ld KB\n", (bman->total_frame_nr * FRAME_SIZE) / 1024);
+    printf("Total Frame: %ld\n", bman->total_frame_nr);
+    for (int i = 0; i < BUDDY_SYSTEM_MAX_ORDER; i++) {
+        printf("  Order %02d\n", i);
+
+        size_t n = bman->free_frame_nr[i];
+        if (n == 0) {
+            printf("    No frame\n");
+        } else {
+            printf("    %ld frame\n", n);
+        }
+
+        elist_foreach(Frame*, itr, &bman->frames[i]) {
+            printf("    idx: %5ld, addr: 0x%lx\n", get_frame_idx(bman, itr), get_frame_addr(bman, itr));
+        }
+    }
+    print_separator();
 }
 
 
@@ -220,25 +267,24 @@ static char const* test_elist_foreach(void) {
     }
     /* int nums[] = {0, 9, 8, 7, 6, 5, 4, 3, 2, 1}; */
 
-    Elist* head = elist_init(&(n[0].list));
-    MIN_UNIT_ASSERT("ERROR: elist_init is wrong.", NULL !=  head);
+    Elist dummy;
+    Elist* dummy_head = elist_init(&dummy);
+    MIN_UNIT_ASSERT("ERROR: elist_init is wrong.", NULL != dummy_head);
 
-    for (size_t i = 1; i < nr; i++) {
-        elist_insert_next(head, &(n[i].list));
-        MIN_UNIT_ASSERT("ERROR: elist_insert_next is wrong.", head->next == (Elist*)&n[i]);
+    for (size_t i = 0; i < nr; i++) {
+        elist_insert_next(dummy_head, &(n[i].list));
+        MIN_UNIT_ASSERT("ERROR: elist_insert_next is wrong.", dummy_head->next == (Elist*)&n[i]);
     }
 
     int cnt = 0;
-    elist_foreach(struct number*, i, head) {
+    elist_foreach (struct number*, i, dummy_head) {
         i->num = cnt++;
     }
 
     cnt = 0;
-    elist_foreach(struct number*, i, head) {
+    elist_foreach (struct number*, i, dummy_head) {
         MIN_UNIT_ASSERT("ERROR: elist_foreach is wrong.", i->num == cnt++);
-        printf("%02d ", i->num);
     }
-    putchar('\n');
 
 
     return NULL;
@@ -289,14 +335,22 @@ int do_all_tests(void) {
 
 int main(void) {
     do_all_tests();
-    printf("============================================================\n");
-    printf("size of Buddy_manager = %lu Byte\n", sizeof(Buddy_manager));
+    printf("============================================================\n\n");
+    printf("sizeof(Buddy_manager) = %lu Byte\n", sizeof(Buddy_manager));
 
     Buddy_manager bman;
+    Buddy_manager* p = &bman;
 
-    if (init_buddy_system(&bman, FRAME_SIZE * 10) == NULL) {
+    if (buddy_init(p, FRAME_SIZE * (1 + 2 + 4 + 8 + 16 + 32 + 64 + 128 + 256 + 512 + 1024)) == NULL) {
         return EXIT_FAILURE;
     }
+    buddy_print(p);
+
+    buddy_get_frames(p, 0);
+    buddy_get_frames(p, 0);
+    buddy_print(p);
+
+    buddy_destruct(p);
 
     return EXIT_SUCCESS;
 }

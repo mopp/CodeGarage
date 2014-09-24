@@ -11,6 +11,8 @@ static char const* test(void) {
         0x00000010,
         0x00001001,
         0x00001fff,
+        0xc0001f00,
+        0x10983102,
     };
 
     size_t pow[] = {
@@ -20,6 +22,8 @@ static char const* test(void) {
         16,
         1024 * 4,
         1024 * 4,
+        1024 * 4,
+        8,
     };
 
     uintptr_t results[] = {
@@ -29,6 +33,8 @@ static char const* test(void) {
         0x00000010,
         0x00002000,
         0x00002000,
+        0xc0002000,
+        0x10983108,
     };
 
     for (int i = 0; i < ARRAY_SIZE_OF(inputs); i++) {

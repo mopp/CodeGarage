@@ -400,11 +400,28 @@ static char const* test_buddy_init(void) {
 }
 
 
+static char const* test_buddy_alloc_free(void) {
+    size_t memory_size = FRAME_SIZE * 1024 * 512;
+    Buddy_manager bman;
+    buddy_init(&bman, memory_size);
+
+    for (int i = BUDDY_SYSTEM_MAX_ORDER - 1; 0 <= i; --i) {
+        while (buddy_alloc_frames(&bman, i & 0xff) != NULL);
+    }
+
+    MIN_UNIT_ASSERT("buddy_init is wrong.", 0 == buddy_get_free_memory_size(&bman));
+    MIN_UNIT_ASSERT("buddy_init is wrong.", memory_size == buddy_get_alloc_memory_size(&bman));
+
+    return NULL;
+}
+
+
 static char const* all_tests(void) {
     MIN_UNIT_RUN(test_elist_foreach);
     MIN_UNIT_RUN(test_get_frame_addr);
     MIN_UNIT_RUN(test_get_buddy_frame);
     MIN_UNIT_RUN(test_buddy_init);
+    MIN_UNIT_RUN(test_buddy_alloc_free);
 
     return NULL;
 }

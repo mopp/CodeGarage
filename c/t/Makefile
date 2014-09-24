@@ -18,6 +18,7 @@ test: $(MAKEFILE)
 	$(MAKE) aqueue
 	$(MAKE) lqueue
 	$(MAKE) memory_dump
+	$(MAKE) align
 
 
 .PHONY: dlist
@@ -44,6 +45,13 @@ lqueue: $(MAKEFILE) ../dlist.c ../lqueue.c ./test_lqueue.c
 .PHONY: memory_dump
 memory_dump: $(MAKEFILE) ../memory_dump.c  ./test_memory_dump.c
 	$(CC) ../$@.c ./test_$@.c -o $@.o
+	@echo ''
+	./$@.o
+	@echo ''
+
+.PHONY: align
+align: $(MAKEFILE) ../align.h  ./test_align.c
+	$(CC) ./test_$@.c -o $@.o
 	@echo ''
 	./$@.o
 	@echo ''

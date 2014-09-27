@@ -136,6 +136,17 @@ uintptr_t get_frame_addr(Buddy_manager const* const bman, Frame const* const fra
 
 
 /**
+ * @brief アドレスからフレームを取得.
+ * @param bman フレームの属するマネージャ.
+ * @param addr フレームアドレス.
+ * @return
+ */
+Frame* get_frame_by_addr(Buddy_manager const * const bman, uintptr_t addr) {
+    return &bman->frame_pool[addr / FRAME_SIZE];
+}
+
+
+/**
  * @brief バディのアドレスが2の累乗であることとxorを利用して、フレームのバディを求める関数.
  *          xor は そのビットが1であれば0に、0であれば1にする.
  *          ---------------------
@@ -313,6 +324,16 @@ size_t buddy_get_alloc_memory_size(Buddy_manager const* const bman) {
 }
 
 
+/**
+ * @brief マネージャ管理下の全メモリ量を求める.
+ * @param bman 求める対象のマネージャ.
+ * @return 全メモリ量.
+ */
+size_t buddy_get_total_memory_size(Buddy_manager const* const bman) {
+    return bman->total_frame_nr * FRAME_SIZE;
+}
+
+
 /* ==================== Test functions. ==================== */
 
 static char const* test_elist_foreach(void) {
@@ -359,6 +380,8 @@ static char const* test_get_frame_addr(void) {
     MIN_UNIT_ASSERT("get_frame_addr is wrong.", 0 == get_frame_addr(&bman, bman.frame_pool));
     MIN_UNIT_ASSERT("get_frame_addr is wrong.", FRAME_SIZE == get_frame_addr(&bman, bman.frame_pool + 1));
     MIN_UNIT_ASSERT("get_frame_addr is wrong.", FRAME_SIZE * 10 == get_frame_addr(&bman, bman.frame_pool + 10));
+    MIN_UNIT_ASSERT("get_frame_by_addr is wrong.", bman.frame_pool + 10 == get_frame_by_addr(&bman, FRAME_SIZE * 10));
+    MIN_UNIT_ASSERT("get_frame_by_addr is wrong.", bman.frame_pool == get_frame_by_addr(&bman, FRAME_SIZE * 0));
 
     free(bman.frame_pool);
 

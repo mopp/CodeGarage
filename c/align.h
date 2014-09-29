@@ -20,13 +20,14 @@ static inline size_t complement_2(size_t x) {
 
 
 static inline bool is_power_of_2(size_t x) {
-    return ((x != 0) && ((x & complement_2(x)) == x));
+    return ((x != 0) && ((x - 1u) & x) == 0);
 }
 
 
 static inline uintptr_t align_address(uintptr_t addr, size_t align_size) {
     assert(is_power_of_2(align_size));
-    return (((addr & (align_size - 1)) == 0)) ? (addr) : ((addr & complement_2(align_size)) + align_size);
+    size_t const a = align_size - 1;
+    return ((size_t)(addr + a) & ~(a));
 }
 
 

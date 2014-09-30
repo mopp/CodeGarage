@@ -14,6 +14,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "minunit.h"
+#include "elist.h"
 
 
 /* Order in buddy system: 0 1 2 3  4  5  6   7   8   9   10 */
@@ -27,13 +28,6 @@
 #define ORDER_FRAME_SIZE(order) (BUDDY_SYSTEM_ORDER_NR(order) * FRAME_SIZE)
 
 #define TO_KB(x) (x >> 11)
-
-
-/* Equipment list */
-typedef struct elist {
-    struct elist* next;
-    struct elist* prev;
-} Elist;
 
 
 struct frame {
@@ -60,51 +54,8 @@ struct buddy_manager {
 typedef struct buddy_manager Buddy_manager;
 
 
-#define elist_get_element(type, list) (type)(list)
-
-#define elist_foreach(type, var, list) \
-    for (type var = elist_get_element(type, (list)->next); (uintptr_t)var != (uintptr_t)(list); var = elist_get_element(type, ((Elist*)var)->next))
-
-
-static inline Elist* elist_init(Elist* l) {
-    l->next = l;
-    l->prev = l;
-    return l;
-}
-
-
-static inline Elist* elist_insert_next(Elist* l, Elist* new) {
-    new->next = l->next;
-    new->prev = l;
-    l->next = new;
-    new->next->prev = new;
-
-    return l;
-}
-
-
-// static inline Elist* elist_insert_prev(Elist* l, Elist* new) {
-//     return elist_insert_next(l->prev, new);
-// }
-
-
-static inline Elist* elist_remove(Elist* n) {
-    Elist* next = n->next;
-    Elist* prev = n->prev;
-    prev->next = next;
-    next->prev = prev;
-
-    return elist_init(n);
-}
-
-
-static inline bool elist_is_empty(Elist* n) {
-    return (n->next == n->prev) && (n == n->next);
-}
-
-
 static inline Frame* elist_get_frame(Elist const* const l) {
-    return (Frame*)l;
+    return elist_derive(Frame, list, l);
 }
 
 
@@ -359,7 +310,7 @@ static char const* test_elist_foreach(void) {
     }
 
     int cnt = 0;
-    elist_foreach(struct number*, i, dummy_head) {
+    elist_foreach(i, dummy_head, struct number, list) {
         i->num = cnt++;
     }
 
@@ -412,7 +363,7 @@ static char const* test_buddy_init(void) {
 
     size_t s = 0;
     for (size_t i = 0; i < BUDDY_SYSTEM_MAX_ORDER; i++) {
-        elist_foreach(Frame*, itr, &bman.frames[i]) {
+        elist_foreach(itr, &bman.frames[i], Frame, list) {
             s += ORDER_FRAME_SIZE(i);
         }
     }
@@ -498,7 +449,7 @@ static inline void print_buddy_system(Buddy_manager* const bman) {
             printf("    %zd frame\n", n);
         }
 
-        elist_foreach(Frame*, itr, &bman->frames[i]) {
+        elist_foreach(itr, &bman->frames[i], Frame, list) {
             printf("    ");
             print_frame_info(bman, itr);
             assert(i == itr->order);
@@ -565,7 +516,7 @@ int main(void) {
                 scanf("%zd", &idx);
 
                 f = NULL;
-                elist_foreach(Frame*, itr, &alloced_frame) {
+                elist_foreach(itr, &alloced_frame, Frame, list) {
                     if (idx == get_frame_idx(p, itr)) {
                         f = itr;
                     }
@@ -587,7 +538,7 @@ int main(void) {
                 }
                 newline();
 
-                elist_foreach(Frame*, itr, &alloced_frame) {
+                elist_foreach(itr, &alloced_frame, Frame, list) {
                     printf("  ");
                     print_frame_info(p, itr);
                 }

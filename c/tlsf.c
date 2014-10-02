@@ -15,6 +15,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 
 
@@ -113,6 +114,7 @@ struct tlsf_manager {
 typedef struct tlsf_manager Tlsf_manager;
 
 
+static inline void print_tlsf(Tlsf_manager* const tman);
 
 /* FIXME: */
 #define BIT_NR(type) (sizeof(type) * 8u)
@@ -153,12 +155,6 @@ static inline size_t adjust_size(size_t size) {
 }
 
 
-static inline void* get_memory_ptr(Block const* b) {
-    assert(b != NULL);
-    return (void*)((uintptr_t)b + BLOCK_MEMORY_OFFSET);
-}
-
-
 static inline size_t get_size(Block const* b) {
     return b->size & (~block_flag_mask);
 }
@@ -170,7 +166,7 @@ static inline bool is_sentinel(Block const* const b) {
 
 
 static inline Block* get_phys_next_block(Block const* const b) {
-    return (is_sentinel(b) == true) ? (NULL) : ((Block*)((uintptr_t)b + (uintptr_t)BLOCK_MEMORY_OFFSET + (uintptr_t)get_size(b)));
+    return (Block*)((uintptr_t)b + (uintptr_t)BLOCK_MEMORY_OFFSET + (uintptr_t)get_size(b));
 }
 
 
@@ -206,7 +202,7 @@ static inline void set_size(Block* b, size_t s) {
 }
 
 
-static inline Block* convert_block(void* mem, size_t size) {
+static inline Block* generate_block(void* mem, size_t size) {
     assert((size & ALIGNMENT_MASK) == 0);
 
     Block* b = mem;
@@ -217,6 +213,18 @@ static inline Block* convert_block(void* mem, size_t size) {
     assert(ALIGNMENT_SIZE <= b->size);
 
     return b;
+}
+
+
+static inline void* convert_mem_ptr(Block const* b) {
+    assert(b != NULL);
+    return (void*)((uintptr_t)b + (uintptr_t)BLOCK_MEMORY_OFFSET);
+}
+
+
+static inline Block* convert_block(void const * p) {
+    assert(p != NULL);
+    return (Block*)((uintptr_t)p - (uintptr_t)BLOCK_MEMORY_OFFSET);
 }
 
 
@@ -253,6 +261,9 @@ static inline void set_idxs(size_t size, size_t* fl, size_t* sl) {
 
 static inline void insert_block(Tlsf_manager* const tman, Block* b) {
     printf("insert_block\n");
+
+    assert(is_sentinel(b) == false);
+
     size_t fl, sl;
     size_t s = get_size(b);
     assert(ALIGNMENT_SIZE <= s);
@@ -260,17 +271,19 @@ static inline void insert_block(Tlsf_manager* const tman, Block* b) {
     set_idxs(s, &fl, &sl);
 
     printf("  Block size = 0x%zx (%zu), fl = %zu, sl = %zu, ptr = %p\n", get_size(b), get_size(b), fl, sl, b);
+    printf("  bitmap fl = 0x%08x, sl = 0x%08x\n", tman->fl_bitmap, tman->sl_bitmaps[fl]);
 
-    tman->fl_bitmap      |= (1 << fl);
-    tman->sl_bitmaps[fl] |= (1 << sl);
+    tman->fl_bitmap      |= P2(fl);
+    tman->sl_bitmaps[fl] |= P2(sl);
+
+    printf("  bitmap fl = 0x%08x, sl = 0x%08x\n", tman->fl_bitmap, tman->sl_bitmaps[fl]);
+    printf("  Block ptr %p\n", b);
     elist_insert_next(get_block_list_head(tman, fl, sl), &b->list);
-
 }
 
 
-static inline Block* remove_block(Tlsf_manager* tman, size_t fl, size_t sl) {
+static inline void sync_bitmap(Tlsf_manager* tman, size_t fl, size_t sl) {
     Elist* head = get_block_list_head(tman, fl, sl);
-    Block* b = elist_derive(Block, list, elist_remove(head->next));
 
     if (elist_is_empty(head) == true) {
         uint16_t* sb = &tman->sl_bitmaps[fl];
@@ -279,27 +292,55 @@ static inline Block* remove_block(Tlsf_manager* tman, size_t fl, size_t sl) {
             tman->fl_bitmap &= ~P2(fl);
         }
     }
+}
+
+
+static inline void sync_bitmap_by_block(Tlsf_manager* tman, Block* b) {
+    if (b->is_free == 0) {
+        return;
+    }
+
+    size_t fl, sl;
+    set_idxs(get_size(b), &fl, &sl);
+    sync_bitmap(tman, fl, sl);
+}
+
+
+static inline Block* remove_block(Tlsf_manager* tman, size_t fl, size_t sl) {
+    Elist* head = get_block_list_head(tman, fl, sl);
+    assert(elist_is_empty(head) == false);
+
+    Block* b = elist_derive(Block, list, elist_remove(head->next));
+    assert(b != NULL);
+
+    sync_bitmap(tman, fl, sl);
 
     return b;
 }
 
 
 static inline Block* remove_good_block(Tlsf_manager* tman, size_t size) {
+    printf("remove_good_block\n");
+    printf("  size   : 0x%zx (%zd)\n", size, size);
+    printf("  offset : 0x%x (%d)\n", BLOCK_MEMORY_OFFSET, BLOCK_MEMORY_OFFSET);
     size += BLOCK_MEMORY_OFFSET;
+    printf("  o_size : 0x%zx (%zd)\n", size, size);
 
     /*
      * ここで、要求サイズ以上の内で、最も大きい範囲に繰り上げを行うことによって
      * 内部フラグメントは生じるが、外部フラグメント、構造フラグメントを抑えることが出来る.
      */
-    /* if (FL_BLOCK_MIN_SIZE < size) { */
-    size += (1 << (find_set_bit_idx_last(size) - SL_MAX_INDEX_LOG2)) - 1;
-    /* } */
+    if (FL_BLOCK_MIN_SIZE <= size) {
+        size += P2(find_set_bit_idx_last(size) - SL_MAX_INDEX_LOG2) - 1;
+    } else {
+        size += SL_BLOCK_MIN_SIZE;
+    }
+    printf("  r_size : 0x%zx (%zd)\n", size, size);
 
     size_t fl, sl;
     set_idxs(size, &fl, &sl);
-    printf("remove_good_block\n");
-    printf("  size: 0x%zx (%zu)\n", size, size);
-    printf("  before fl = %02zu, sl = %02zu\n", fl, sl);
+    printf("  fl = %02zu, sl = %02zu\n", fl, sl);
+    printf("  bitmap fl = 0x%08x, sl = 0x%08x\n", tman->fl_bitmap, tman->sl_bitmaps[fl]);
 
     /* 現在のsl以上のフラグのみ取得 */
     size_t sl_map = tman->sl_bitmaps[fl] & (~0u << sl);
@@ -307,7 +348,7 @@ static inline Block* remove_good_block(Tlsf_manager* tman, size_t size) {
         /* 現在のflにはメモリが無いので、一つ上のindexのフラグを取得 */
         size_t fl_map = tman->fl_bitmap & (~0u << (fl + 1));
         if (fl_map == 0) {
-            printf("\n    *NOT EXIST ENOUGH MEMORY*\n\n");
+            printf("\n\n    *NOT EXIST ENOUGH MEMORY*\n\n");
             return NULL;
         }
         /* 大きい空きエリアを探す. */
@@ -318,7 +359,8 @@ static inline Block* remove_good_block(Tlsf_manager* tman, size_t size) {
     /* 使えるsl内のメモリを取得. */
     sl = find_set_bit_idx_first(sl_map);
 
-    printf("  after  fl = %02zu, sl = %02zu\n", fl, sl);
+    printf("  fl = %02zu, sl = %02zu\n", fl, sl);
+    printf("  bitmap fl = 0x%08x, sl = 0x%08x\n", tman->fl_bitmap, tman->sl_bitmaps[fl]);
 
     return remove_block(tman, fl, sl);
 }
@@ -329,6 +371,7 @@ static inline Block* remove_good_block(Tlsf_manager* tman, size_t size) {
  */
 static inline Block* divide_block(Block* b, size_t size) {
     assert(b != NULL);
+    assert(is_sentinel(b) == false);
     assert(size != 0);
 
     size_t nblock_all_size = size + BLOCK_MEMORY_OFFSET;
@@ -336,41 +379,101 @@ static inline Block* divide_block(Block* b, size_t size) {
         return NULL;
     }
 
+    printf("divide_block\n");
+    printf("  size : 0x%zx (%zu)\n", get_size(b), get_size(b));
     set_size(b, get_size(b) - nblock_all_size);
+
     Block* nb = get_phys_next_block(b);
-    nb->size = size;
+
+    elist_init(&nb->list);
+    set_size(nb, size);
+    set_free(nb);
+    set_prev_free(nb);
     nb->prev_block = b;
+
+    printf("  divided\n");
+    printf("    ptr  : %p\n", b);
+    printf("    size : 0x%zx (%zu)\n", get_size(b), get_size(b));
+    printf("    ptr  : %p\n", nb);
+    printf("    size : 0x%zx (%zu)\n", get_size(nb), get_size(nb));
 
     return nb;
 }
 
 
-static inline Block* merge_phys_next_block(Block* b) {
-    Block* next = get_phys_prev_block(b);
-    if (is_sentinel(next) == true) {
+/*
+ * b1に対してb2にくっつける
+ * 物理メモリ上ではb1のアドレスのほうがb2より低い.
+ *  -> b1 < b2
+ */
+static inline void merge_phys_block(Tlsf_manager* tman, Block* b1, Block* b2) {
+    assert(b1->is_free == 1 && b2->is_free == 1);
+    assert(b1 < b2);
+    /* assert(((uintptr_t)b1 + (uintptr_t)get_size(b1)) == (uintptr_t)b2); */
+    printf("merge\n");
+
+    if (is_sentinel(b2) == true) {
+        printf("  sentinel\n");
+        return;
+    }
+
+    elist_remove(&b1->list);
+    sync_bitmap_by_block(tman, b1);
+
+    elist_remove(&b2->list);
+    sync_bitmap_by_block(tman, b2);
+
+    printf("  b1 size       : 0x%zx\n", get_size(b1));
+    printf("  b1 ptr        : %p\n", b1);
+    printf("  b1 ptr end    : %p\n", (void*)((uintptr_t)b1 + get_size(b1)));
+    printf("  b2 size       : 0x%zx\n", get_size(b2));
+    printf("  b2 ptr        : %p\n", b2);
+    printf("  b2 ptr end    : %p\n", (void*)((uintptr_t)b2 + get_size(b2)));
+    set_size(b1, get_size(b1) + BLOCK_MEMORY_OFFSET + get_size(b2));
+
+    insert_block(tman, b1);
+    printf("  b1 size       : 0x%zx\n", get_size(b1));
+    printf("  b1 ptr        : %p\n", b1);
+    printf("  b1 ptr end    : %p\n", (void*)((uintptr_t)b1 + get_size(b1)));
+    printf("  next ptr      : %p\n", get_phys_next_block(b1));
+    printf("  next size ptr : %p\n", &get_phys_next_block(b1)->size);
+    printf("  frame ptr     : %p\n", ((Frame*)(tman->frames.next))->addr);
+    printf("  frame end ptr : %p\n", ((Frame*)(tman->frames.next))->addr + ((Frame*)(tman->frames.next))->size);
+
+    set_prev_free(get_phys_next_block(b1));
+}
+
+
+static inline Block* merge_phys_next_block(Tlsf_manager* tman, Block* b) {
+    printf("merge - next\n");
+    Block* next = get_phys_next_block(b);
+    if (is_sentinel(next) == true || next->is_free == 0) {
+        printf("  next is sentinel or alloc\n");
         return b;
     }
 
-    set_size(b, get_size(b) + BLOCK_MEMORY_OFFSET + get_size(next));
+    merge_phys_block(tman, b, next);
 
     return b;
 }
 
 
-static inline Block* merge_phys_prev_block(Block* b) {
+static inline Block* merge_phys_prev_block(Tlsf_manager* tman, Block* b) {
+    printf("merge - prev\n");
     Block* prev = get_phys_prev_block(b);
-    if (prev == NULL || prev->is_free == 1) {
+    if (prev == NULL || prev->is_free == 0) {
+        printf("  prev is NULL or alloc\n");
         return b;
     }
 
-    merge_phys_next_block(prev);
+    merge_phys_block(tman, prev, b);
 
     return prev;
 }
 
 
-static inline Block* merge_phys_neighbor_blocks(Block* b) {
-    return merge_phys_prev_block(merge_phys_next_block(b));
+static inline Block* merge_phys_neighbor_blocks(Tlsf_manager* tman, Block* b) {
+    return merge_phys_prev_block(tman, merge_phys_next_block(tman, b));
 }
 
 
@@ -419,13 +522,14 @@ void tlsf_supply_memory(Tlsf_manager* tman, size_t size) {
     f->size  = size;
     elist_insert_next(&tman->frames, &f->list);
     printf("      struct addr : %p\n", f);
-    printf("             addr : %p\n", f->addr);
+    printf("             addr : %p ~ 0x%zx\n", f->addr, (uintptr_t)f->addr + (uintptr_t)f->size);
 
     size_t ns        = (f->size - BLOCK_MEMORY_OFFSET);
     printf("             size : 0x%zx (%zu)\n", f->size, f->size);
     printf("  align down size : 0x%zx (%zu)\n", ns, ns);
-    Block* new_block = convert_block(f->addr, ns);
+    Block* new_block = generate_block(f->addr, ns);
     set_free(new_block);
+    elist_init(&new_block->list);
 
     Block* sentinel = (Block*)((uintptr_t)f->addr + (uintptr_t)ns);
     sentinel->prev_block = new_block;
@@ -448,7 +552,8 @@ void* tlsf_malloc(Tlsf_manager* tman, size_t size) {
         return NULL;
     }
 
-    size_t a_size      = adjust_size(size);
+    /* 一つ上のサイズにする. */
+    size_t a_size = adjust_size(size);
 
     printf("  size   : 0x%zx (%zu)\n", size, size);
     printf("  a_size : 0x%zx (%zu)\n", a_size, a_size);
@@ -472,7 +577,24 @@ void* tlsf_malloc(Tlsf_manager* tman, size_t size) {
     tman->free_memory_size -= get_size(select);
 
     claer_free(select);
-    return get_memory_ptr(select);
+    return convert_mem_ptr(select);
+}
+
+
+void tlsf_free(Tlsf_manager* tman, void* p) {
+    printf("free\n");
+    printf("  ptr: %p\n", p);
+
+    if (tman == NULL || p == NULL) {
+        return;
+    }
+
+    Block* b = convert_block(p);
+    set_free(b);
+
+    b = merge_phys_neighbor_blocks(tman, b);
+    printf("debug\n");
+    tman->free_memory_size += get_size(b);
 }
 
 
@@ -482,14 +604,13 @@ static inline void print_separator(void) {
 
 
 static inline void print_tlsf(Tlsf_manager* const tman) {
-    printf("\n");
     print_separator();
     printf("print_tlsf\n");
 
     for (size_t i = 0; i < FL_MAX_INDEX; i++) {
         bool f = is_fl_list_available(tman, i);
         size_t fs = (i == 0) ? 0 : P2(i + FL_BASE_INDEX);
-        printf("First Lv: %02zu - %s", i, (f ? ("Enable") : ("Disable")));
+        printf("First Lv: %02zu - %s", i, (f ? ("Enable ") : ("Disable")));
         printf(" - (0x%08zx <= size < 0x%08zx)\n", fs, fs << 1);
 
         if (f == false) {
@@ -501,35 +622,39 @@ static inline void print_tlsf(Tlsf_manager* const tman) {
                 continue;
             }
             printf("  Second Lv: %02zu", j);
-            size_t ss = fs + (j * SL_BLOCK_MIN_SIZE);
-            printf(" - (0x%08zx <= size < 0x%08zx)\n", ss, ss + SL_BLOCK_MIN_SIZE);
+            size_t ss = fs + (i == 0 ? (j * SL_BLOCK_MIN_SIZE) : (j * (fs / SL_MAX_INDEX)));
+            printf(" - (0x%08zx <= size < 0x%08zx)\n", ss, ss + (i == 0 ? SL_BLOCK_MIN_SIZE : (fs / SL_MAX_INDEX)));
 
             Elist* l = get_block_list_head(tman, i, j);
             elist_foreach(itr, l, Block, list) {
                 printf("    Block size      : 0x%08zx (%zd)\n", get_size(itr), get_size(itr));
-                printf("          ptr       : %p\n", get_memory_ptr(itr));
+                printf("          ptr       : %p\n", convert_mem_ptr(itr));
                 printf("          free      : %d\n", itr->is_free);
                 printf("          prev free : %d\n", itr->is_free_prev);
             }
         }
     }
+
+    print_separator();
+    printf("\n");
 }
+
+
+// static inline void print_tlsf(Frame const* f) {
+//
+// }
 
 
 static char const* test_indexes(void) {
     size_t fl, sl;
 
-    size_t sizes[] = {
-        140, 32, 11, 1024, 16 << 20, (4 << 20) * 1024 - 1u,
-    };
-
-    size_t ans_fl[] = {0, 0, 0, 0, 15, 22};
-
-    size_t ans_sl[] = {1, 0, 0, 15, 0, 15};
+    size_t sizes[]  = {140, 32, 11, 1024, 16 << 20, (4 << 20) * 1024 - 1u, };
+    size_t ans_fl[] = {0, 0, 0, 1, 15, 22};
+    size_t ans_sl[] = {2, 0, 0, 0, 0, 15};
 
     for (int i = 0; i < 6; i++) {
         set_idxs(sizes[i], &fl, &sl);
-        printf("size = 0x%08zx, fl = %02zu, sl = %02zu\n", sizes[i], fl, sl);
+        /* printf("size = 0x%08zx, fl = %02zu, sl = %02zu\n", sizes[i], fl, sl); */
         MIN_UNIT_ASSERT("set_idxs is wrong.", fl == ans_fl[i] && sl == ans_sl[i]);
     }
 
@@ -573,34 +698,34 @@ int main(void) {
 
     tlsf_init(p);
 
-    tlsf_supply_memory(p, (4 + BLOCK_MEMORY_OFFSET * 2));
+    tlsf_supply_memory(p, ((18 << 20) + BLOCK_MEMORY_OFFSET * 3));
     printf("Total memory size : 0x%zx\n", p->total_memory_size);
     printf("Free memory size  : 0x%zx\n", p->free_memory_size);
     print_tlsf(p);
 
+    printf("\nStart Loop\n");
+
+    srand((unsigned int)time(NULL));
+    size_t times = 0;
     size_t cnt = 0;
-    size_t alloc_size = 1;
-    void* alloc;
-    do {
-       putchar('\n');
-       print_separator();
+    size_t alloc_size = 0x1000;
+    void* allocs[10];
+    static size_t const s = 10;
 
-       alloc = tlsf_malloc(p, alloc_size);
-       printf("Allocated addr    : %p\n", alloc);
-       printf("Total memory size : 0x%zx\n", p->total_memory_size);
-       printf("Free memory size  : 0x%zx\n", p->free_memory_size);
+    while (times++ < 100000) {
+        print_separator();
+        printf("%zd\n", cnt);
 
-       if (alloc != NULL) {
-           cnt++;
-           memset(alloc, 16, adjust_size(alloc_size));
-           print_tlsf(p);
-       }
-    } while (alloc != NULL);
-    printf("\nallocation times : %zd\n", cnt);
-    printf("           size  : 0x%zx\n", cnt * adjust_size(alloc_size));
-    printf("  offset + size  : 0x%zx\n", (cnt * adjust_size(alloc_size)) + BLOCK_MEMORY_OFFSET * (cnt + 2));
+        size_t r_size = (((size_t)rand() / alloc_size) + 1u);
+        allocs[cnt] = tlsf_malloc(p, r_size);
 
-    /* print_tlsf(p); */
+        ++cnt;
+        if (s <= cnt || allocs[cnt - 1] == NULL) {
+            for (int i = 0; i <= (cnt - 1); i++) {
+                tlsf_free(p, allocs[i]);
+            }
+        }
+    }
 
     tlsf_destruct(p);
 

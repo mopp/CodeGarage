@@ -128,7 +128,7 @@ static inline void mprintf(char const * fmt, ...){
     va_end(arg);
 }
 
-
+#if 0
 /* FIXME: */
 #define BIT_NR(type) (sizeof(type) * 8u)
 static inline size_t find_set_bit_idx_first(size_t n) {
@@ -154,6 +154,40 @@ static inline size_t find_set_bit_idx_last(size_t n) {
     } while (((mask & n) == 0) && (mask >>= 1) != 0);
 
     return idx;
+}
+#endif
+
+__asm__ (
+        "find_set_bit_idx_last: \n\t"
+        "movq %rdi, %rax        \n\t"
+        "bsrq %rax, %rax        \n\t"
+        "ret                    \n\t"
+    );
+size_t find_set_bit_idx_last(size_t);
+
+__asm__ (
+        "find_set_bit_idx_first: \n\t"
+        "movq   %rdi, %rax        \n\t"
+        "tzcntq %rax, %rax        \n\t"
+        "ret                    \n\t"
+    );
+size_t find_set_bit_idx_first(size_t);
+
+static size_t sl_index_mask = 1u << SL_MAX_INDEX_LOG2;
+static inline void set_idxs(size_t size, size_t* fl, size_t* sl) {
+    if (size < FL_BLOCK_MIN_SIZE) {
+        *fl = 0;
+        *sl = size >> (SL_BLOCK_MIN_SIZE_LOG2);
+    } else {
+        /* Calculate First level index. */
+        *fl = find_set_bit_idx_last(size);
+
+        /* Calculate Second level index. */
+        *sl = (size >> (*fl - SL_MAX_INDEX_LOG2)) ^ (sl_index_mask);
+
+        /* Shift index. */
+        *fl -= FL_BASE_INDEX;
+    }
 }
 
 
@@ -256,23 +290,6 @@ static inline bool is_fl_list_available(Tlsf_manager const* const tman, size_t f
 
 static inline bool is_sl_list_available(Tlsf_manager const* const tman, size_t fl, size_t sl) {
     return ((tman->sl_bitmaps[fl] & P2(sl)) != 0) ? true : false;
-}
-
-
-static inline void set_idxs(size_t size, size_t* fl, size_t* sl) {
-    if (size < FL_BLOCK_MIN_SIZE) {
-        *fl = 0;
-        *sl = size / (SL_BLOCK_MIN_SIZE);
-    } else {
-        /* Calculate First level index. */
-        *fl = find_set_bit_idx_last(size);
-
-        /* Calculate Second level index. */
-        *sl = (size >> (*fl - SL_MAX_INDEX_LOG2)) ^ (1 << SL_MAX_INDEX_LOG2);
-
-        /* Shift index. */
-        *fl -= FL_BASE_INDEX;
-    }
 }
 
 
@@ -701,12 +718,14 @@ static char const* test_indexes(void) {
     size_t fl, sl;
 
     size_t sizes[]  = {140, 32, 11, 1024, 16 << 20, (4 << 20) * 1024 - 1u, };
+    /* size_t sizes[]  = {140, 32, 11, 1024, 16 << 20, 4u * 1024u * 1024u, }; */
     size_t ans_fl[] = {0, 0, 0, 1, 15, 22};
     size_t ans_sl[] = {2, 0, 0, 0, 0, 15};
+    printf("%zu\n", sizeof(size_t));
 
     for (int i = 0; i < 6; i++) {
         set_idxs(sizes[i], &fl, &sl);
-        /* printf("size = 0x%08zx, fl = %02zu, sl = %02zu\n", sizes[i], fl, sl); */
+        printf("size = 0x%08zx, fl = %02zu, sl = %02zu\n", sizes[i], fl, sl);
         MIN_UNIT_ASSERT("set_idxs is wrong.", fl == ans_fl[i] && sl == ans_sl[i]);
     }
 

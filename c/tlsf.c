@@ -184,18 +184,23 @@ static inline void set_idxs(size_t size, size_t* fl, size_t* sl) {
 }
 
 
-static inline size_t align_up(size_t x) {
-    return (x + (ALIGNMENT_SIZE - 1u)) & ~(ALIGNMENT_SIZE - 1u);
+static inline size_t align_up(size_t x, size_t a) {
+    return (x + (a - 1u)) & ~(a - 1u);
 }
 
 
-// static inline size_t align_down(size_t x) {
-//     return x - (x & (ALIGNMENT_SIZE - 1u));
-// }
+static inline size_t align_down(size_t x, size_t a) {
+    return x - (x & (a - 1u));
+}
+
+
+static inline size_t block_align_up(size_t x) {
+    return align_up(x, ALIGNMENT_SIZE);
+}
 
 
 static inline size_t adjust_size(size_t size) {
-    return align_up(size);
+    return block_align_up(size);
 }
 
 
@@ -379,7 +384,7 @@ static inline Block* remove_good_block(Tlsf_manager* tman, size_t size) {
 /*
  * 引数で与えられたブロックの持つメモリからsize分の新しいブロックを取り出して返す.
  */
-static inline Block* divide_block(Block* b, size_t size) {
+static inline Block* divide_block(Block* b, size_t size, size_t align) {
     assert(b != NULL);
     assert(is_sentinel(b) == false);
     assert(size != 0);
@@ -396,6 +401,17 @@ static inline Block* divide_block(Block* b, size_t size) {
 
     set_size(b, get_size(b) - nblock_all_size);
     Block* new_next = get_phys_next_block(b);
+
+    if (align != 0) {
+        /* mallocの戻り値はオフセット分加算されるのでその分を引いておく. */
+        uintptr_t t    = (uintptr_t)align_down((size_t)new_next, align) - BLOCK_OFFSET;
+        uintptr_t diff = (uintptr_t)new_next - t;
+
+        size += diff;
+        set_size(b, get_size(b) - (size_t)diff);
+
+        new_next = (Block*)t;
+    }
 
     old_next->prev_block = new_next;
     new_next->prev_block = b;
@@ -549,35 +565,32 @@ void tlsf_supply_memory(Tlsf_manager* tman, size_t size) {
 }
 
 
-void* tlsf_malloc(Tlsf_manager* tman, size_t size) {
-    // mprintf("malloc\n");
+void* tlsf_malloc_align(Tlsf_manager* tman, size_t size, size_t align) {
+    assert((align == 0) || ((align - 1u) & align) == 0);
+
     if (size == 0 || tman == NULL) {
         return NULL;
     }
 
-    /* 一つ上のサイズにする. */
-    size_t a_size = adjust_size(size);
-
-    // mprintf("  size   : 0x%zx (%zu)\n", size, size);
-    // mprintf("  a_size : 0x%zx (%zu)\n", a_size, a_size);
-
-    Block* good_block  = remove_good_block(tman, a_size);
-    if (good_block == NULL) {
+    size_t a_size = adjust_size(size + align + BLOCK_OFFSET);
+    Block* gb = remove_good_block(tman, a_size);
+    if (gb == NULL) {
         return NULL;
     }
 
-    Block* alloc_block = divide_block(good_block, a_size);
-    Block* select;
-    if (alloc_block == NULL) {
+    Block* ab = divide_block(gb, a_size, align);
+    Block* sb;
+    if (ab == NULL) {
         /* 分割出来なかったのでそのまま使用 */
-        select = good_block;
+        sb = gb;
     } else {
-        select = alloc_block;
-        insert_block(tman, good_block);
+        /* 分割したので使わないブロックを戻す. */
+        sb = ab;
+        insert_block(tman, gb);
         tman->free_memory_size -= BLOCK_OFFSET;
     }
 
-    tman->free_memory_size -= get_size(select);
+    tman->free_memory_size -= get_size(sb);
 
     while (tman->free_memory_size < ALLOC_WATERMARK) {
         // メモリを補給
@@ -585,10 +598,13 @@ void* tlsf_malloc(Tlsf_manager* tman, size_t size) {
         printf("alloc water\n");
     }
 
-    // mprintf("Free memory size  : 0x%zx\n", tman->free_memory_size);
+    claer_free(sb);
+    return convert_mem_ptr(sb);
+}
 
-    claer_free(select);
-    return convert_mem_ptr(select);
+
+void* tlsf_malloc(Tlsf_manager* tman, size_t size) {
+    return tlsf_malloc_align(tman, size, 0);
 }
 
 
@@ -769,10 +785,10 @@ static char const* test_find_bit(void) {
 }
 
 
-static char const* test_align_up(void) {
+static char const* test_block_align_up(void) {
     for (size_t i = ALIGNMENT_SIZE; i < 0x100000; i*= ALIGNMENT_SIZE) {
         for (size_t j = 1; j < ALIGNMENT_SIZE; j++) {
-            MIN_UNIT_ASSERT("find_set_bit_idx_last is wrong.", align_up(i - j) == i);
+            MIN_UNIT_ASSERT("find_set_bit_idx_last is wrong.", block_align_up(i - j) == i);
         }
     }
 
@@ -783,7 +799,7 @@ static char const* test_align_up(void) {
 static char const* all_tests(void) {
     MIN_UNIT_RUN(test_indexes);
     MIN_UNIT_RUN(test_find_bit);
-    MIN_UNIT_RUN(test_align_up);
+    MIN_UNIT_RUN(test_block_align_up);
     return NULL;
 }
 
@@ -826,10 +842,15 @@ int main(void) {
     double begin = gettimeofday_sec();
     for (size_t times = 0; times < limit; times++) {
         size_t r_size = (((size_t)rand() % mod) + 1u);
-        void* m = tlsf_malloc(p, r_size);
+        size_t align = PO2((size_t)rand() % 16);
+        void* m = tlsf_malloc_align(p, r_size, align);
+
+        assert(((uintptr_t)m & (align - 1)) == 0);
 
         if (m == NULL) {
             failed++;
+        } else {
+            /* memset(m, 0xff, r_size); */
         }
 
         allocs[cnt] = m;

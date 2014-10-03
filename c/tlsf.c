@@ -69,7 +69,7 @@ typedef struct block Block;
 enum {
     ALIGNMENT_LOG2           = 2,
     ALIGNMENT_SIZE           = PO2(ALIGNMENT_LOG2),
-    ALIGNMENT_MASK           = 0x3,
+    ALIGNMENT_MASK           = ALIGNMENT_SIZE - 1,
 
     FL_BASE_INDEX            = 10 - 1,
     FL_MAX_INDEX             = (32 - FL_BASE_INDEX),
@@ -85,6 +85,10 @@ enum {
     BLOCK_FLAG_BIT_FREE      = 0x01,
     BLOCK_FLAG_BIT_PREV_FREE = 0x02,
     BLOCK_FLAG_MASK          = 0x03,
+
+    FRAME_SIZE               = 0x1000,
+    ALLOC_WATERMARK          = FRAME_SIZE * 10,
+    FREE_WATERMARK           = 1 * 1024 * 1024 * 1024,
 };
 
 
@@ -98,9 +102,12 @@ struct tlsf_manager {
 };
 typedef struct tlsf_manager Tlsf_manager;
 
+
+
 static bool is_debug = false;
 
-#if 0
+
+#if 1
 static inline void print_block(Block* b, size_t tab);
 static inline void print_tlsf(Tlsf_manager * tman);
 static inline void mprintf(char const * fmt, ...){
@@ -113,6 +120,7 @@ static inline void mprintf(char const * fmt, ...){
     va_end(arg);
 }
 #endif
+
 
 #if 0
 #define BIT_NR(type) (sizeof(type) * 8u)
@@ -141,6 +149,7 @@ static inline size_t find_set_bit_idx_last(size_t n) {
     return idx;
 }
 #endif
+
 
 __asm__ (
         "find_set_bit_idx_last: \n\t"
@@ -240,8 +249,8 @@ static inline void set_size(Block* b, size_t s) {
 static inline Block* generate_block(void* mem, size_t size) {
     assert((size & ALIGNMENT_MASK) == 0);
 
-    Block* b = mem;
-    b->size = size - BLOCK_OFFSET;
+    Block* b      = mem;
+    b->size       = size - BLOCK_OFFSET;
     b->prev_block = NULL;
     elist_init(&b->list);
 
@@ -526,6 +535,7 @@ void tlsf_supply_memory(Tlsf_manager* tman, size_t size) {
 
     Block* sentinel = (Block*)((uintptr_t)f->addr + (uintptr_t)ns);
     sentinel->prev_block = new_block;
+    sentinel->size = 0;
 
     assert(get_phys_next_block(new_block) == sentinel);
     assert(is_sentinel(sentinel) == true);
@@ -569,6 +579,12 @@ void* tlsf_malloc(Tlsf_manager* tman, size_t size) {
 
     tman->free_memory_size -= get_size(select);
 
+    while (tman->free_memory_size < ALLOC_WATERMARK) {
+        // メモリを補給
+        tlsf_supply_memory(tman, FRAME_SIZE * 3);
+        printf("alloc water\n");
+    }
+
     // mprintf("Free memory size  : 0x%zx\n", tman->free_memory_size);
 
     claer_free(select);
@@ -594,11 +610,34 @@ void tlsf_free(Tlsf_manager* tman, void* p) {
 
     b = merge_phys_neighbor_blocks(tman, b);
 
+    if ((FREE_WATERMARK < tman->free_memory_size) && (is_sentinel(get_phys_next_block(b)) == true) && (b->prev_block == NULL)) {
+        Frame* f = NULL;
+        elist_foreach(i, &tman->frames, Frame, list) {
+            if ((uintptr_t)i->addr == (uintptr_t)b) {
+                f = i;
+            }
+        }
+
+        assert(f != NULL);
+
+        elist_remove(&b->list);
+        sync_bitmap_by_block(tman, b);
+
+        tman->free_memory_size  -= FRAME_SIZE;
+        tman->total_memory_size -= FRAME_SIZE;
+
+        // FIXME:
+        elist_remove(&f->list);
+        free(f->addr);
+        free(f);
+
+        printf("free water\n");
+    }
+
     // mprintf("Free memory size  : 0x%zx\n", tman->free_memory_size);
 }
 
 
-#if 0
 static inline bool is_fl_list_available(Tlsf_manager const* const tman, size_t fl) {
     return ((tman->fl_bitmap & PO2(fl)) != 0) ? true : false;
 }
@@ -698,7 +737,6 @@ static inline void print_tag_list(Frame* f) {
         b = get_phys_next_block(b);
     }
 }
-#endif
 
 
 static char const* test_indexes(void) {
@@ -710,7 +748,7 @@ static char const* test_indexes(void) {
 
     for (int i = 0; i <  sizeof(sizes)/ sizeof(size_t); i++) {
         set_idxs(sizes[i], &fl, &sl);
-        printf("size = 0x%08zx, fl = %02zu, sl = %02zu\n", sizes[i], fl, sl);
+        /* printf("size = 0x%08zx, fl = %02zu, sl = %02zu\n", sizes[i], fl, sl); */
         MIN_UNIT_ASSERT("set_idxs is wrong.", fl == ans_fl[i] && sl == ans_sl[i]);
     }
 
@@ -731,9 +769,21 @@ static char const* test_find_bit(void) {
 }
 
 
+static char const* test_align_up(void) {
+    for (size_t i = ALIGNMENT_SIZE; i < 0x100000; i*= ALIGNMENT_SIZE) {
+        for (size_t j = 1; j < ALIGNMENT_SIZE; j++) {
+            MIN_UNIT_ASSERT("find_set_bit_idx_last is wrong.", align_up(i - j) == i);
+        }
+    }
+
+    return NULL;
+}
+
+
 static char const* all_tests(void) {
     MIN_UNIT_RUN(test_indexes);
     MIN_UNIT_RUN(test_find_bit);
+    MIN_UNIT_RUN(test_align_up);
     return NULL;
 }
 
@@ -753,43 +803,44 @@ static double gettimeofday_sec(void) {
 int main(void) {
     do_all_tests();
 
-    // putchar('\n');
-    // print_separator();
-
     Tlsf_manager tman;
     Tlsf_manager* p = &tman;
 
     tlsf_init(p);
 
-    size_t cnt                     = 0;
-    size_t limit                   = 1000000;
-    size_t alloc_size              = (1 * 1024 * 1024 * 1024) + (BLOCK_OFFSET * 3);
-    static size_t const array_size = 30;
-    void* allocs[array_size];
-    srand((unsigned int)time(NULL));
-
-    tlsf_supply_memory(p, alloc_size);
-
-    is_debug = true;
-    printf("Total memory size : 0x%zx\n", p->total_memory_size);
-    printf("Free memory size  : 0x%zx\n", p->free_memory_size);
-    /* print_tlsf(p); */
-    /* print_tag_list((Frame*)p->frames.next); */
+    tlsf_supply_memory(p, 1 * 1024 * 1024 * 1024);
+    assert(p->total_memory_size == p->free_memory_size);
 
     printf("\nStart Loop\n");
-    is_debug = false;
+    is_debug = true;
 
+#if 1
+    size_t cnt                     = 0;
+    size_t limit                   = 10000000;
+    size_t mod                     = 4 * 1024 * 1024;
+    size_t failed = 0;
+    static size_t const array_size = 100;
+    void* allocs[array_size];
+
+    srand((unsigned int)time(NULL));
     double begin = gettimeofday_sec();
     for (size_t times = 0; times < limit; times++) {
-        size_t r_size = (((size_t)rand() / alloc_size) + 1u);
-        allocs[cnt] = tlsf_malloc(p, r_size);
+        size_t r_size = (((size_t)rand() % mod) + 1u);
+        void* m = tlsf_malloc(p, r_size);
+
+        if (m == NULL) {
+            failed++;
+        }
+
+        allocs[cnt] = m;
 
         ++cnt;
-        if (array_size <= cnt || allocs[cnt - 1u] == NULL || times == limit - 1) {
+        if (array_size <= cnt || m == NULL || times == limit - 1) {
             for (int i = 0; i <= (cnt - 1u); i++) {
                 tlsf_free(p, allocs[i]);
             }
             cnt = 0;
+            assert(p->total_memory_size == p->free_memory_size);
         }
     }
     double end = gettimeofday_sec();
@@ -797,11 +848,8 @@ int main(void) {
     is_debug = true;
     printf("Finish Loop\n\n");
     printf("Time is %f\n", end - begin);
-
-    printf("Total memory size : 0x%zx\n", p->total_memory_size);
-    printf("Free memory size  : 0x%zx\n", p->free_memory_size);
-    /* print_tlsf(p); */
-    /* print_tag_list((Frame*)p->frames.next); */
+    printf("failed is %zu\n", failed);
+#endif
 
     tlsf_destruct(p);
 

@@ -24,6 +24,7 @@ typedef struct elist {
 
 #define elist_derive(type, lv, ptr) \
     (type*)((uintptr_t)(ptr)-offsetof(type, lv))
+
 #define elist_foreach(i, l, type, lv) \
     for (type* i = elist_derive(type, lv, (l)->next); (&i->lv != (l)); i = elist_derive(type, lv, i->lv.next))
 

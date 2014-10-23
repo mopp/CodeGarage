@@ -47,8 +47,17 @@ static char const* test(void) {
 }
 
 
+static char const* test2(void) {
+    /* printf("Input: 0x%zx, Result: 0x%zx, Align: %zu\n", 100u, align_up(0x45, 0x40), 128u); */
+    /* MIN_UNIT_ASSERT("align_address is wrong.", results[i] == t); */
+
+    return NULL;
+}
+
+
 static char const* all_tests(void) {
     MIN_UNIT_RUN(test);
+    MIN_UNIT_RUN(test2);
     return NULL;
 }
 

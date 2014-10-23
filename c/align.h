@@ -34,5 +34,15 @@ static inline uintptr_t align_address(uintptr_t addr, size_t align_size) {
 }
 
 
+static inline size_t align_up(size_t x, size_t a) {
+    return (x + (a - 1u)) & ~(a - 1u);
+}
+
+
+static inline size_t align_down(size_t x, size_t a) {
+    return x & ~(a - 1u);
+}
+
+
 
 #endif

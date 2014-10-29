@@ -492,7 +492,7 @@ static inline void merge_phys_block(Tlsf_manager* tman, Block* b1, Block* b2) {
     remove_block(tman, b1);
     remove_block(tman, b2);
 
-    Block* old_next      = get_phys_next_block(b1);
+    Block* old_next      = get_phys_next_block(b2);
     old_next->prev_block = b1;
 
     set_size(b1, get_size(b1) + BLOCK_OFFSET + get_size(b2));

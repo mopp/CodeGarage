@@ -4,7 +4,9 @@
 # allow directors
 !c
 !scala
+!ruby
 
 # allow files
 !.gitignore
 !*.md
+!*.rb

@@ -5,8 +5,10 @@
 !c
 !scala
 !ruby
+!rust
 
 # allow files
 !.gitignore
 !*.md
 !*.rb
+!*.rs

@@ -1,17 +1,14 @@
-// Invalid
-
 #![feature(shared)]
-// #![no_std]
+#![no_std]
 
-extern crate core;
+// extern crate core;
 use core::ptr::Shared;
-use core::cmp::PartialEq;
 
 
-type Link<T> = Option<Shared<WList<T>>>;
+type Link<T> = Option<Shared<AList<T>>>;
 
 
-struct WList<T>  {
+struct AList<T>  {
     front: Link<T>,
     back: Link<T>,
     content: Shared<T>
@@ -19,14 +16,23 @@ struct WList<T>  {
 
 
 // Static methods.
-impl<T> WList<T>  {
-    fn make_link(node: &mut WList<T>) -> Link<T>
+impl<T> AList<T> {
+    fn new(content: &mut T) -> AList<T>
+    {
+        AList {
+            front: None,
+            back: None,
+            content: unsafe {Shared::new(content)},
+        }
+    }
+
+    fn make_link(node: &mut AList<T>) -> Link<T>
     {
         Some(unsafe {Shared::new(node)})
     }
 
 
-    fn link<'a>(l: Link<T>) -> Option<&'a WList<T>>
+    fn link<'a>(l: Link<T>) -> Option<&'a AList<T>>
     {
         match l {
             None => None,
@@ -35,7 +41,7 @@ impl<T> WList<T>  {
     }
 
 
-    fn link_mut<'a>(l: Link<T>) -> Option<&'a mut WList<T>>
+    fn link_mut<'a>(l: Link<T>) -> Option<&'a mut AList<T>>
     {
         match l {
             None => None,
@@ -44,10 +50,10 @@ impl<T> WList<T>  {
     }
 
 
-    fn link_each_other(node1: &mut WList<T>, node2: &mut WList<T>)
+    fn link_each_other(node1: &mut AList<T>, node2: &mut AList<T>)
     {
-        let node1_opt = WList::make_link(node1);
-        let node2_opt = WList::make_link(node2);
+        let node1_opt = AList::make_link(node1);
+        let node2_opt = AList::make_link(node2);
 
         node1.front = node2_opt;
         node1.back  = node2_opt;
@@ -56,7 +62,7 @@ impl<T> WList<T>  {
     }
 
 
-    fn push_guard(pushed: &WList<T>, new: &WList<T>) {
+    fn push_guard(pushed: &AList<T>, new: &AList<T>) {
         if new.is_empty() == false {
             panic!("New node should NOT be linked to other nodes.");
         }
@@ -68,14 +74,12 @@ impl<T> WList<T>  {
 }
 
 
-impl<T> WList<T> {
-    fn new(content: &mut T) -> WList<T>
+impl<T> AList<T> {
+    fn init(&mut self, content: &mut T)
     {
-        WList {
-            front: None,
-            back: None,
-            content: unsafe {Shared::new(content)},
-        }
+        self.front   = None;
+        self.back    = None;
+        self.content = unsafe {Shared::new(content)};
     }
 
 
@@ -108,51 +112,51 @@ impl<T> WList<T> {
     }
 
 
-    fn front(&self) -> Option<&WList<T>>
+    fn front(&self) -> Option<&AList<T>>
     {
-        WList::link(self.front)
+        AList::link(self.front)
     }
 
 
-    fn front_mut(&self) -> Option<&mut WList<T>>
+    fn front_mut(&self) -> Option<&mut AList<T>>
     {
-        WList::link_mut(self.front)
+        AList::link_mut(self.front)
     }
 
 
-    fn back(&self) -> Option<&WList<T>>
+    fn back(&self) -> Option<&AList<T>>
     {
-        WList::link(self.back)
+        AList::link(self.back)
     }
 
 
-    fn back_mut(&self) -> Option<&mut WList<T>>
+    fn back_mut(&self) -> Option<&mut AList<T>>
     {
-        WList::link_mut(self.back)
+        AList::link_mut(self.back)
     }
 
 
-    fn push_front(&mut self, mut new: WList<T>)
+    fn push_front(&mut self, new: &mut AList<T>)
     {
-        WList::push_guard(self, &new);
+        AList::push_guard(self, new);
 
         if self.is_empty() == true {
             // If self is not linked by any other nodes.
-            WList::link_each_other(self, &mut new);
+            AList::link_each_other(self, new);
             return;
         }
 
-        let self_opt = WList::make_link(self);
+        let self_opt = AList::make_link(self);
         new.front = self.front;
         new.back = self_opt;
 
-        let new_opt = WList::make_link(&mut new);
+        let new_opt = AList::make_link(new);
         self.front_mut().unwrap().back = new_opt;
         self.front = new_opt;
     }
 
 
-    fn pop_front(&mut self) -> Option<Shared<WList<T>>>
+    fn pop_front(&mut self) -> Option<Shared<T>>
     {
         match self.front {
             None => None,
@@ -160,35 +164,35 @@ impl<T> WList<T> {
                 let front  = unsafe { &**shared_front };
                 self.front = front.front;
                 let tmp    = unsafe { &mut **self.front.unwrap()};
-                tmp.back   = WList::make_link(self);
+                tmp.back   = AList::make_link(self);
 
-                Some(shared_front)
+                Some(front.content)
             }
         }
     }
 
 
-    fn push_back(&mut self, mut new: WList<T>)
+    fn push_back(&mut self, new: &mut AList<T>)
     {
-        WList::push_guard(self, &new);
+        AList::push_guard(self, new);
 
         if self.is_empty() == true {
             // If self is not linked by any other nodes.
-            WList::link_each_other(self, &mut new);
+            AList::link_each_other(self, new);
             return;
         }
 
-        let self_opt = WList::make_link(self);
+        let self_opt = AList::make_link(self);
         new.front = self_opt;
         new.back  = self.back;
 
-        let new_opt = WList::make_link(&mut new);
+        let new_opt = AList::make_link(new);
         self.back_mut().unwrap().front = new_opt;
         self.back = new_opt;
     }
 
 
-    fn pop_back(&mut self) -> Option<&mut T>
+    fn pop_back(&mut self) -> Option<Shared<T>>
     {
         match self.back {
             None => None,
@@ -196,9 +200,9 @@ impl<T> WList<T> {
                 let back  = unsafe { &**shared_back };
                 self.back = back.back;
                 let tmp   = unsafe { &mut **self.back.unwrap()};
-                tmp.front = WList::make_link(self);
+                tmp.front = AList::make_link(self);
 
-                Some(back.borrow_mut())
+                Some(back.content)
             }
         }
     }
@@ -219,8 +223,8 @@ impl<T> WList<T> {
 }
 
 
-impl<T> PartialEq for WList<T> {
-    fn eq(&self, other: &WList<T>) -> bool
+impl<T> PartialEq for AList<T> {
+    fn eq(&self, other: &AList<T>) -> bool
     {
         let addr_self  = (self as *const _) as usize;
         let addr_other = (other as *const _) as usize;
@@ -232,8 +236,8 @@ impl<T> PartialEq for WList<T> {
 macro_rules! def_iter_struct {
     ($i:ident) => {
         struct $i<'a, T: 'a> {
-            begin_node: &'a WList<T>,
-            current_node: &'a WList<T>,
+            begin_node: &'a AList<T>,
+            current_node: &'a AList<T>,
             is_first: bool,
         }
     };
@@ -295,15 +299,16 @@ impl<'a, T> Iterator for IterMut<'a, T> {
 
 #[cfg(test)]
 mod test {
-    use super::WList;
+    use super::AList;
+    use core::mem;
 
     #[test]
     fn test_push_front()
     {
-        let mut n1 = WList::<usize>::new(&mut 0);
-        let n2     = WList::<usize>::new(&mut 1);
+        let mut n1 = AList::<usize>::new(&mut 0);
+        let mut n2 = AList::<usize>::new(&mut 1);
 
-        n1.push_front(n2);
+        n1.push_front(&mut n2);
 
         assert_eq!(0, *n1.borrow());
         assert_eq!(1, *n1.front().unwrap().borrow());
@@ -321,8 +326,8 @@ mod test {
             assert_eq!(7, *n2.back().unwrap().borrow());
         }
 
-        let n3 = WList::<usize>::new(&mut 2);
-        n1.push_front(n3);
+        let mut n3 = AList::<usize>::new(&mut 2);
+        n1.push_front(&mut n3);
         {
             let n2 = n1.back().unwrap();
             assert_eq!(1, *n2.borrow());
@@ -337,8 +342,8 @@ mod test {
             assert_eq!(7, *n3.front().unwrap().front().unwrap().borrow());
         }
 
-        let n4 = WList::<usize>::new(&mut 3);
-        n1.push_front(n4);
+        let mut n4 = AList::<usize>::new(&mut 3);
+        n1.push_front(&mut n4);
         {
             let n4 = n1.front().unwrap();
             assert_eq!(3, *n4.borrow());
@@ -346,16 +351,28 @@ mod test {
             assert_eq!(1, *n4.front().unwrap().front().unwrap().borrow());
             assert_eq!(7, *n4.back().unwrap().borrow());
         }
+
+        let mut n1 = AList::new(&mut 0);
+        let mut n2 = AList::new(&mut 1);
+        let mut n3 = AList::new(&mut 2);
+        let mut n4 = AList::new(&mut 3);
+        n1.push_front(&mut n2);
+        n1.push_front(&mut n3);
+        n1.push_front(&mut n4);
+        assert_eq!(0, *n1.borrow());
+        assert_eq!(3, *n1.front().unwrap().borrow());
+        assert_eq!(2, *n1.front().unwrap().front().unwrap().borrow());
+        assert_eq!(1, *n1.back().unwrap().borrow());
     }
 
 
     #[test]
     fn test_push_back()
     {
-        let mut n1 = WList::<usize>::new(&mut 0);
-        let n2 = WList::<usize>::new(&mut 1);
+        let mut n1 = AList::<usize>::new(&mut 0);
+        let mut n2 = AList::<usize>::new(&mut 1);
 
-        n1.push_back(n2);
+        n1.push_back(&mut n2);
 
         assert_eq!(1, *n1.front().unwrap().borrow());
         assert_eq!(1, *n1.back().unwrap().borrow());
@@ -372,8 +389,8 @@ mod test {
             assert_eq!(7, *n2.back().unwrap().borrow());
         }
 
-        let n3 = WList::<usize>::new(&mut 2);
-        n1.push_back(n3);
+        let mut n3 = AList::<usize>::new(&mut 2);
+        n1.push_back(&mut n3);
         {
             let n3 = n1.back().unwrap();
             assert_eq!(2, *n3.borrow());
@@ -388,8 +405,8 @@ mod test {
             assert_eq!(7, *n2.front().unwrap().front().unwrap().borrow());
         }
 
-        let n4 = WList::<usize>::new(&mut 3);
-        n1.push_back(n4);
+        let mut n4 = AList::<usize>::new(&mut 3);
+        n1.push_back(&mut n4);
         {
             let n4 = n1.back().unwrap();
             assert_eq!(3, *n4.borrow());
@@ -399,22 +416,18 @@ mod test {
         }
     }
 
-    macro_rules! def_iter_struct {
-        () => {
-        };
-    }
 
     #[test]
     fn test_itr()
     {
-        let mut n1 = WList::new(&mut 0);
-        let n2 = WList::new(&mut 1);
-        let n3 = WList::new(&mut 2);
-        let n4 = WList::new(&mut 3);
+        let mut n1 = AList::new(&mut 0);
+        let mut n2 = AList::new(&mut 1);
+        let mut n3 = AList::new(&mut 2);
+        let mut n4 = AList::new(&mut 3);
 
-        n1.push_front(n2);
-        n1.front_mut().unwrap().push_front(n3);
-        n1.front_mut().unwrap().front_mut().unwrap().push_front(n4);
+        n1.push_front(&mut n2);
+        n1.front_mut().unwrap().push_front(&mut n3);
+        n1.front_mut().unwrap().front_mut().unwrap().push_front(&mut n4);
 
         let mut itr = n1.iter();
         assert_eq!(0, *itr.next().unwrap());
@@ -435,31 +448,23 @@ mod test {
     #[test]
     fn test_itr_mut()
     {
-        let n1 =
-            {
-                let mut n1 = WList::new(&mut 0);
-                let n2 = WList::new(&mut 1);
-                let n3 = WList::new(&mut 2);
-                let n4 = WList::new(&mut 3);
+        let mut n1 = AList::new(&mut 0);
+        let mut n2 = AList::new(&mut 1);
+        let mut n3 = AList::new(&mut 2);
+        let mut n4 = AList::new(&mut 3);
 
-                n1.push_front(n2);
-                n1.front_mut().unwrap().push_front(n3);
-                n1.front_mut().unwrap().front_mut().unwrap().push_front(n4);
-
-                println!("0x{:x}", (&n1  as *const _) as usize);
-                n1
-            };
-        println!("0x{:x}", (&n1  as *const _) as usize);
+        n1.push_front(&mut n2);
+        n1.front_mut().unwrap().push_front(&mut n3);
+        n1.front_mut().unwrap().front_mut().unwrap().push_front(&mut n4);
 
         let mut cnt = 0;
         let ans = [0, 1, 2, 3];
-        // for i in n1.iter_mut() {
-            // println!("{:?}", i);
-            // assert_eq!(ans[cnt], *i);
-            // cnt += 1;
+        for i in n1.iter_mut() {
+            assert_eq!(ans[cnt], *i);
+            cnt += 1;
 
-            // *i += 999;
-        // }
+            *i += 999;
+        }
 
         cnt = 0;
         for i in n1.iter() {
@@ -470,16 +475,16 @@ mod test {
 
 
     #[test]
-    fn test_pop_front()
+    fn test_pop()
     {
-        let mut n1 = WList::new(&mut 0);
-        let n2 = WList::new(&mut 1);
-        let n3 = WList::new(&mut 2);
-        let n4 = WList::new(&mut 3);
+        let mut n1 = AList::new(&mut 0);
+        let mut n2 = AList::new(&mut 1);
+        let mut n3 = AList::new(&mut 2);
+        let mut n4 = AList::new(&mut 3);
 
-        n1.push_front(n2);
-        n1.front_mut().unwrap().push_front(n3);
-        n1.front_mut().unwrap().front_mut().unwrap().push_front(n4);
+        n1.push_front(&mut n2);
+        n1.front_mut().unwrap().push_front(&mut n3);
+        n1.front_mut().unwrap().front_mut().unwrap().push_front(&mut n4);
 
         let mut cnt = 0;
         let ans = [0, 1, 2, 3];
@@ -488,11 +493,44 @@ mod test {
             cnt += 1;
         }
 
-        let content = {*unsafe {&**(n1.pop_front().unwrap())}.borrow()};
-        assert_eq!(1, content);
+        let content = unsafe {&**n1.pop_front().unwrap()};
+        assert_eq!(1, *content);
 
         let mut cnt = 0;
         let ans = [0, 2, 3];
+        for i in n1.iter() {
+            assert_eq!(ans[cnt], *i);
+            cnt += 1;
+        }
+
+        let content = unsafe { &**n1.pop_back().unwrap() };
+        assert_eq!(3, *content);
+        let mut cnt = 0;
+        let ans = [0, 2];
+        for i in n1.iter() {
+            assert_eq!(ans[cnt], *i);
+            cnt += 1;
+        }
+    }
+
+    #[test]
+    fn test_macro_gen()
+    {
+        let mut n1 = AList::new(&mut 0);
+        let mut arr: [usize; 3] = [1, 2, 3];
+        let mut src: [AList<usize>; 3];
+
+        unsafe {
+            src = mem::uninitialized();
+        }
+
+        for i in 0..arr.len() {
+            src[i].init(&mut arr[i]);
+            n1.push_front(&mut src[i]);
+        }
+
+        let mut cnt = 0;
+        let ans = [0, 3, 2, 1];
         for i in n1.iter() {
             assert_eq!(ans[cnt], *i);
             cnt += 1;

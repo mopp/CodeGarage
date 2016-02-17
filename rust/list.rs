@@ -514,7 +514,7 @@ mod test {
     }
 
     #[test]
-    fn test_macro_gen()
+    fn test_array()
     {
         let mut n1 = AList::new(&mut 0);
         let mut arr: [usize; 3] = [1, 2, 3];

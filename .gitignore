@@ -6,9 +6,11 @@
 !scala
 !ruby
 !rust
+!haskell
 
 # allow files
 !.gitignore
 !*.md
 !*.rb
 !*.rs
+!*.hs

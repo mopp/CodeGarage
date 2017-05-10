@@ -1,0 +1,7 @@
+[package]
+name = "sample_nom"
+version = "0.1.0"
+authors = ["mopp"]
+
+[dependencies]
+nom = "^2.2"

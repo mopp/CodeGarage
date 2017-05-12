@@ -1,30 +1,30 @@
-// http://qiita.com/k5n/items/e95842744fc5db931d03
-
 #[macro_use]
 extern crate nom;
 
-use nom::{IResult, space, alpha};
+use nom::{IResult, be_u8};
 
-named!(name_parser<&str>,
-    chain!(
-        tag!("Hello,") ~
-        space? ~
-        name: map_res!(
-            alpha,
+named!(factor<i64>,
+    map_res!(
+        map_res!(
+            ws!(nom::digit),
             std::str::from_utf8
-        ) ~
-        tag!("!") ,
-
-        || name
+        ),
+        std::str::FromStr::from_str
     )
 );
 
 
 fn main()
 {
-    match name_parser("Hello, world!".as_bytes()) {
-        IResult::Done(_, name) => println!("name = {}", name),
-        IResult::Error(error) => println!("Error: {:?}", error),
+    print_parser_result(factor("129".as_bytes()));
+}
+
+
+fn print_parser_result<T, U>(r: IResult<T, U>) where T: std::fmt::Debug, U: std::fmt::Debug
+{
+    match r {
+        IResult::Done(remain, get)  => println!("remain = {:?}, get = {:?}", remain, get),
+        IResult::Error(error)       => println!("Error: {:?}", error),
         IResult::Incomplete(needed) => println!("Incomplete: {:?}", needed)
     }
 }

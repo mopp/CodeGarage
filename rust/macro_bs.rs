@@ -283,7 +283,7 @@ mod tests {
 
             FN FIBONACCI(N) {
                 IF ((N == 0) || (N == 1)) {
-                    RETURN 1;
+                    RETURN N;
                 }
 
                 LET_MUT X = 0;

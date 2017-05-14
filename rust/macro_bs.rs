@@ -14,7 +14,7 @@ macro_rules! interpret_basic {
     };
 
     (INPUT $var:ident ; $( $rest:tt )*) => {
-        let mut $var: usize = {
+        $var = {
             // https://github.com/rust-lang/rust/issues/23818
             use std::io::Write;
             std::io::stdout().flush().expect("could not flush the stdout.");
@@ -89,6 +89,7 @@ macro_rules! interpret_basic {
 
 
 #[allow(non_snake_case)]
+#[allow(unused_assignments)]
 fn main()
 {
     interpret_basic!{
@@ -100,6 +101,7 @@ fn main()
         PRINT "B = ", B;
         PRINT ;
 
+        LET A = 2;
         IF (A == 2) {
             PRINT "The condition is matched !\n";
             PRINT "A is 2\n";
@@ -110,31 +112,53 @@ fn main()
         }
         PRINT;
 
-        PRINT "B = ";
-        INPUT B;
+        LET_MUT N = 0;
+        PRINT "N = ";
+        INPUT N;
 
-        PRINT "Your input number is ";
-        PRINT B;
-        PRINT "\n";
+        PRINT "Your input number is ", N, "\n";
 
-        IF ((B % 15) == 0) {
-            PRINT "FizzBuzz\n";
-        } ELSE {
-            IF ((B % 3) == 0) {
-                PRINT "Fizz\n";
+        FN FIZZ_BUZZ(N) {
+            PRINT "It is ";
+
+            IF ((N % 15) == 0) {
+                PRINT "FizzBuzz\n";
             } ELSE {
-                IF ((B % 5) == 0) {
-                    PRINT "Buzz\n";
+                IF ((N % 3) == 0) {
+                    PRINT "Fizz\n";
                 } ELSE {
-                    PRINT B;
-                    PRINT "\n";
+                    IF ((N % 5) == 0) {
+                        PRINT "Buzz\n";
+                    } ELSE {
+                        PRINT N, "\n";
+                    }
                 }
             }
         }
 
-        B = 100;
-        PRINT B;
-        PRINT "\nFIN\n";
+        FIZZ_BUZZ(N);
+
+        FN FIBONACCI(N) {
+            IF ((N == 0) || (N == 1)) {
+                RETURN N;
+            }
+
+            LET_MUT X = 0;
+            LET_MUT Y = 1;
+            LET_MUT F = 0;
+            FOR _ = 2 TO (N + 1) {
+                F = X + Y;
+                X = Y;
+                Y = F;
+            }
+
+            RETURN F;
+        }
+
+        LET F = FIBONACCI(N);
+        PRINT N, "th fibonacci number is ", F, "\n";
+
+        PRINT "FIN\n";
     };
 }
 

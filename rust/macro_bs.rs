@@ -236,6 +236,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(unreachable_code)]
     fn test_fn() {
         interpret_basic!{
             FN SAMPLE_FUNC1() {

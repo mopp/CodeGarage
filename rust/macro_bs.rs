@@ -45,7 +45,7 @@ macro_rules! interpret_basic {
         interpret_basic!($($rest)*);
     };
 
-    (FOR $var:ident = $begin:tt TO $end:tt { $( $inner:tt )* } $($rest:tt)*) => {
+    (FOR $var:pat = $begin:tt TO $end:tt { $( $inner:tt )* } $($rest:tt)*) => {
         for $var in $begin..$end {
             interpret_basic!($($inner)*);
         }
@@ -82,7 +82,6 @@ macro_rules! interpret_basic {
         };
         interpret_basic!($($rest)*);
     };
-
 
     (RETURN $value:expr; $($rest:tt)*) => {
         return $value;
@@ -283,9 +282,33 @@ mod tests {
             }
             LET A = 456;
             LET B = SAMPLE_FUNC1();
+
+            FN FIBONACCI(N) {
+                IF ((N == 0) || (N == 1)) {
+                    RETURN 1;
+                }
+
+                LET_MUT X = 0;
+                LET_MUT Y = 1;
+                LET_MUT F = 0;
+                FOR _ = 2 TO (N + 1) {
+                    F = X + Y;
+                    X = Y;
+                    Y = F;
+                }
+
+                RETURN F;
+            }
+
+            LET F0  = FIBONACCI(0);
+            LET F1  = FIBONACCI(1);
+            LET F10 = FIBONACCI(10);
         };
 
         assert_eq!(A, 456);
         assert_eq!(B, 100);
+        assert_eq!(F0, 0);
+        assert_eq!(F1, 1);
+        assert_eq!(F10, 55);
     }
 }

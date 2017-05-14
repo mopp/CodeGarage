@@ -3,14 +3,14 @@ macro_rules! interpret_basic {
         ()
     };
 
-    (PRINT ; $( $rest:tt )*) => {
+    (PRINT ; $( $rest:tt )+) => {
         println!("");
-        interpret_basic!($($rest)*);
+        interpret_basic!($($rest)+);
     };
 
-    (PRINT $arg:expr ; $( $rest:tt )*) => {
+    (PRINT $arg:expr ; $( $rest:tt )+) => {
         print!("{}", $arg);
-        interpret_basic!($($rest)*);
+        interpret_basic!($($rest)+);
     };
 
     (PRINT $arg:expr $(, $args:expr)* ; $( $rest:tt )*) => {
@@ -75,7 +75,20 @@ macro_rules! interpret_basic {
         $var = $val;
         interpret_basic!($($rest)*);
     };
+
+    (FN $name:ident ( $($args:ident),* ) { $($inner:tt)* } $($rest:tt)*) => {
+        let $name = |$($args: usize),*| {
+            interpret_basic!($($inner)*);
+        };
+        interpret_basic!($($rest)*);
+    };
+
+
+    (RETURN $value:expr; $($rest:tt)*) => {
+        return $value;
+    };
 }
+
 
 #[allow(non_snake_case)]
 fn main()
@@ -122,7 +135,6 @@ fn main()
         PRINT B;
         PRINT "\nFIN\n";
     };
-
 }
 
 
@@ -225,5 +237,55 @@ mod tests {
             }
         };
         assert_eq!(A, 2 + 4 + 6 + 8 + 10);
+    }
+
+    #[test]
+    fn test_fn() {
+        interpret_basic!{
+            FN SAMPLE_FUNC1() {
+            }
+
+            FN SAMPLE_FUNC2() {
+                LET A = 1;
+                PRINT A;
+            }
+
+            FN SAMPLE_FUNC3(A) {
+                RETURN A;
+            }
+
+            FN SAMPLE_FUNC4(A) {
+                RETURN A * 2;
+            }
+
+            FN SAMPLE_FUNC5(N) {
+                IF ((N % 2) == 0) {
+                    RETURN 1;
+                } ELSE {
+                    RETURN 0;
+                }
+            }
+        };
+
+        assert_eq!(SAMPLE_FUNC1(), ());
+        assert_eq!(SAMPLE_FUNC2(), ());
+        assert_eq!(SAMPLE_FUNC3(100), 100);
+        assert_eq!(SAMPLE_FUNC4(2), 4);
+        assert_eq!(SAMPLE_FUNC5(2), 1);
+        assert_eq!(SAMPLE_FUNC5(3), 0);
+    }
+
+    #[test]
+    fn test_return() {
+        interpret_basic!{
+            FN SAMPLE_FUNC1() {
+                RETURN 100;
+            }
+            LET A = 456;
+            LET B = SAMPLE_FUNC1();
+        };
+
+        assert_eq!(A, 456);
+        assert_eq!(B, 100);
     }
 }

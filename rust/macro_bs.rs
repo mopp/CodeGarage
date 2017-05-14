@@ -122,4 +122,108 @@ fn main()
         PRINT B;
         PRINT "\nFIN\n";
     };
+
+}
+
+
+#[cfg(test)]
+#[allow(non_snake_case)]
+mod tests {
+    #[test]
+    fn test_empty()
+    {
+        assert_eq!(interpret_basic!{}, ());
+    }
+
+    #[test]
+    fn test_let()
+    {
+        interpret_basic!{
+            LET A = 100;
+            LET longlong_var = 1231;
+            LET VAR = 1 + 2 + 3 / 2;
+            LET VAR2 = 10 * 10;
+        };
+
+        assert_eq!(A, 100);
+        assert_eq!(longlong_var, 1231);
+        assert_eq!(VAR, 4);
+        assert_eq!(VAR2, 100);
+    }
+
+    #[test]
+    fn test_let_mut()
+    {
+        interpret_basic!{
+            LET_MUT A = 100;
+        };
+
+        assert_eq!(A, 100);
+
+        interpret_basic!{
+            A = 200;
+        };
+
+        assert_eq!(A, 200);
+    }
+
+    #[test]
+    fn test_if()
+    {
+        interpret_basic!{
+            LET_MUT A = 100;
+            IF (A == 100) {
+                A = A - 10;
+            }
+        };
+
+        assert_eq!(A, 90);
+
+        interpret_basic!{
+            LET_MUT A = 100;
+            IF ((A % 10) == 0) {
+                A = A + 10;
+            }
+        };
+
+        assert_eq!(A, 110);
+    }
+
+    #[test]
+    fn test_if_else()
+    {
+        interpret_basic!{
+            LET_MUT A = 100;
+            IF (A != 100) {
+                A = A - 10;
+            } ELSE {
+                A = A / 10;
+            }
+        };
+
+        assert_eq!(A, 10);
+    }
+
+
+    #[test]
+    fn test_for() {
+        interpret_basic!{
+            LET_MUT A = 0;
+            FOR i = 1 TO 11 {
+                A = A + i;
+            }
+        };
+
+        assert_eq!(A, 55);
+
+        interpret_basic!{
+            LET_MUT A = 0;
+            FOR i = 1 TO 11 {
+                IF ((i % 2) == 0) {
+                    A = A + i;
+                }
+            }
+        };
+        assert_eq!(A, 2 + 4 + 6 + 8 + 10);
+    }
 }

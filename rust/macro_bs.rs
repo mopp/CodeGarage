@@ -3,19 +3,32 @@ macro_rules! interpret_basic {
         ()
     };
 
-    (PRINT ; $( $rest:tt )+) => {
+    (PRINT ; $( $rest:tt )*) => {
         println!("");
-        interpret_basic!($($rest)+);
+        interpret_basic!($( $rest )*);
     };
 
-    (PRINT $arg:expr ; $( $rest:tt )+) => {
-        print!("{}", $arg);
-        interpret_basic!($($rest)+);
+    (PRINT $( $args:expr ),+ ; $( $rest:tt )*) => {
+        $( print!("{}", $args); )+
+        interpret_basic!($( $rest )*);
     };
 
-    (PRINT $arg:expr $(, $args:expr)* ; $( $rest:tt )*) => {
-        print!("{}", $arg);
-        $(print!("{}", $args))*;
+    (INPUT $var:ident ; $($rest:tt)*) => {
+        let mut $var: usize = {
+            // https://github.com/rust-lang/rust/issues/23818
+            use std::io::Write;
+            std::io::stdout().flush().expect("could not flush the stdout.");
+
+            let mut number_string = String::new();
+            std::io::stdin()
+                .read_line(&mut number_string)
+                .expect("Failed to read line");
+
+            number_string
+                .trim()
+                .parse::<usize>()
+                .expect("The input allows only a number.")
+        };
         interpret_basic!($($rest)*);
     };
 
@@ -52,25 +65,6 @@ macro_rules! interpret_basic {
         interpret_basic!($($rest)*);
     };
 
-    (INPUT $var:ident ; $($rest:tt)*) => {
-        let mut $var: usize = {
-            // https://github.com/rust-lang/rust/issues/23818
-            use std::io::Write;
-            std::io::stdout().flush().expect("could not flush the stdout.");
-
-            let mut number_string = String::new();
-            std::io::stdin()
-                .read_line(&mut number_string)
-                .expect("Failed to read line");
-
-            number_string
-                .trim()
-                .parse::<usize>()
-                .expect("The input allows only a number.")
-        };
-        interpret_basic!($($rest)*);
-    };
-
     ($var:ident = $val:expr ; $($rest:tt)*) => {
         $var = $val;
         interpret_basic!($($rest)*);
@@ -96,7 +90,10 @@ fn main()
         PRINT "Hello, world!\n";
 
         LET A = 1 + 1;
-        PRINT A, "\n";
+        LET B = A + 2;
+        PRINT "A = ", A, ", ";
+        PRINT "B = ", B;
+        PRINT ;
 
         IF (A == 2) {
             PRINT "The condition is matched !\n";

@@ -80,6 +80,11 @@ macro_rules! interpret_basic {
     (RETURN $value:expr; $( $rest:tt )*) => {
         return $value;
     };
+
+    ($func_name:ident ($( $args:ident ),*) ; $( $rest:tt )*) => {
+        $func_name($( $args ),*);
+        interpret_basic!($( $rest )*);
+    }
 }
 
 

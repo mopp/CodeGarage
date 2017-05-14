@@ -19,8 +19,13 @@ macro_rules! interpret_basic {
         interpret_basic!($($rest)*);
     };
 
-    (LET $var:ident = $val:expr ; $( $rest:tt )*) => {
+    (LET_MUT $var:ident = $val:expr ; $( $rest:tt )*) => {
         let mut $var: usize = $val;
+        interpret_basic!($($rest)*);
+    };
+
+    (LET $var:ident = $val:expr ; $( $rest:tt )*) => {
+        let $var: usize = $val;
         interpret_basic!($($rest)*);
     };
 

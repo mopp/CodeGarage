@@ -13,7 +13,7 @@ macro_rules! interpret_basic {
         interpret_basic!($( $rest )*);
     };
 
-    (INPUT $var:ident ; $($rest:tt)*) => {
+    (INPUT $var:ident ; $( $rest:tt )*) => {
         let mut $var: usize = {
             // https://github.com/rust-lang/rust/issues/23818
             use std::io::Write;
@@ -29,55 +29,55 @@ macro_rules! interpret_basic {
                 .parse::<usize>()
                 .expect("The input allows only a number.")
         };
-        interpret_basic!($($rest)*);
+        interpret_basic!($( $rest )*);
     };
 
     (LET_MUT $var:ident = $val:expr ; $( $rest:tt )*) => {
         let mut $var: usize = $val;
-        interpret_basic!($($rest)*);
+        interpret_basic!($( $rest )*);
     };
 
     (LET $var:ident = $val:expr ; $( $rest:tt )*) => {
         let $var: usize = $val;
-        interpret_basic!($($rest)*);
+        interpret_basic!($( $rest )*);
     };
 
-    (IF ( $cond:expr ) { $( $inner_if:tt )* } ELSE { $( $inner_else:tt )* } $($rest:tt)*) => {
+    (IF ( $cond:expr ) { $( $inner_if:tt )* } ELSE { $( $inner_else:tt )* } $( $rest:tt )*) => {
         if $cond {
-            interpret_basic!($($inner_if)*);
+            interpret_basic!($( $inner_if )*);
         } else {
-            interpret_basic!($($inner_else)*);
+            interpret_basic!($( $inner_else )*);
         }
-        interpret_basic!($($rest)*);
+        interpret_basic!($( $rest )*);
     };
 
-    (IF ( $cond:expr ) { $( $inner:tt )* } $($rest:tt)*) => {
+    (IF ( $cond:expr ) { $( $inner:tt )* } $( $rest:tt )*) => {
         if $cond {
-            interpret_basic!($($inner)*);
+            interpret_basic!($( $inner )*);
         }
-        interpret_basic!($($rest)*);
+        interpret_basic!($( $rest )*);
     };
 
-    (FOR $var:pat = $begin:tt TO $end:tt { $( $inner:tt )* } $($rest:tt)*) => {
+    (FOR $var:pat = $begin:tt TO $end:tt { $( $inner:tt )* } $( $rest:tt )*) => {
         for $var in $begin..$end {
-            interpret_basic!($($inner)*);
+            interpret_basic!($( $inner )*);
         }
-        interpret_basic!($($rest)*);
+        interpret_basic!($( $rest )*);
     };
 
-    ($var:ident = $val:expr ; $($rest:tt)*) => {
+    ($var:ident = $val:expr ; $( $rest:tt )*) => {
         $var = $val;
-        interpret_basic!($($rest)*);
+        interpret_basic!($( $rest )*);
     };
 
-    (FN $name:ident ( $($args:ident),* ) { $($inner:tt)* } $($rest:tt)*) => {
-        let $name = |$($args: usize),*| {
-            interpret_basic!($($inner)*);
+    (FN $name:ident ( $( $args:ident ),* ) { $( $inner:tt )* } $( $rest:tt )*) => {
+        let $name = |$( $args: usize ),*| {
+            interpret_basic!($( $inner )*);
         };
-        interpret_basic!($($rest)*);
+        interpret_basic!($( $rest )*);
     };
 
-    (RETURN $value:expr; $($rest:tt)*) => {
+    (RETURN $value:expr; $( $rest:tt )*) => {
         return $value;
     };
 }

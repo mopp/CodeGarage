@@ -11,7 +11,8 @@
 # $ NVIM_LISTEN_ADDRESS=[address] ./hello.rb
 
 require 'msgpack/rpc'
-    require 'msgpack/rpc/transport/unix'
+require 'msgpack/rpc/transport/unix'
 
 nvim = MessagePack::RPC::Client.new(MessagePack::RPC::UNIXTransport.new, ENV['NVIM_LISTEN_ADDRESS'])
 result = nvim.call(:nvim_command, 'echo "hello world!"')
+result = nvim.call(:nvim_command, "echo \"your address is #{ENV['NVIM_LISTEN_ADDRESS']}\"")

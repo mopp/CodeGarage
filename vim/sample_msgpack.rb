@@ -12,7 +12,11 @@
 
 require 'msgpack/rpc'
 require 'msgpack/rpc/transport/unix'
+require 'pp'
 
 nvim = MessagePack::RPC::Client.new(MessagePack::RPC::UNIXTransport.new, ENV['NVIM_LISTEN_ADDRESS'])
 result = nvim.call(:nvim_command, 'echo "hello world!"')
 result = nvim.call(:nvim_command, "echo \"your address is #{ENV['NVIM_LISTEN_ADDRESS']}\"")
+n, info = nvim.call(:vim_get_api_info)
+info['functions'].map{|v| puts("#{v['name']}(#{v['parameters'].join(',')})") }
+pp info.keys()

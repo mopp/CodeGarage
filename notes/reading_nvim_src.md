@@ -1,5 +1,9 @@
 # Neovimのソースを読む
 * wikiの`Developers`の項目にC言語のtipsやneovim固有ルールなどが書いてあるので参照しながら読む
+* `src/nvim/README.md`も参照
+* Vimは入力駆動ステートマシン(より具体的にはプッシュダウン・オートマトン)
+* insert/normal/visualなど以外に内部実装の都合で入力待ち状態などを持つ
+    * `vim_state`構造体がそのためのコールバック関数と状態を持つ
 
 # 便利リンク
 * [Neovim - Wiki](https://github.com/neovim/neovim/wiki)
@@ -65,7 +69,7 @@ Code Overview(リンク一覧を参照)にソース全体の説明が書いて�
     * `set_init_2`
     * `init_highlight`
 * `"-u NONE`があれば`loadplugins`をfalseにする
-* `source_startup_scripts`関数でvimrcを読み込み
-    * `do_source`: Read the file "fname" and execute its lines as EX commands.
+* `source_startup_scripts`関数でユーザスクリプトを読み込み
     * `do_user_initialization`: Source vimrc or do other user initialization
+    * `do_source`: Read the file "fname" and execute its lines as EX commands.
 

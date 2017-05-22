@@ -5,7 +5,7 @@ use std::ops::Add;
 use List::*;
 
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 enum List<T> {
     Node(T, Box<List<T>>),
     Nil,
@@ -51,6 +51,32 @@ impl<T> List<T> {
             Node(_, ref tail) => 1 + tail.length(),
             Nil               => 0
         }
+    }
+
+    fn last(self) -> T
+    {
+        match self {
+            Nil => panic!("List::Nil cannot have any value."),
+            Node(v, box Nil) => v,
+            Node(_, tail) => tail.last(),
+        }
+    }
+
+    fn nth(self, idx: usize) -> Option<T>
+    {
+        fn f<T>(list: List<T>, idx: usize, count: usize) -> Option<T>
+        {
+            if let Node(v, box tail) = list {
+                if count == idx {
+                    return Some(v);
+                }
+                f(tail, idx, count + 1)
+            } else {
+                None
+            }
+        }
+
+        f(self, idx, 0)
     }
 }
 
@@ -111,6 +137,24 @@ mod tests {
 
         let n = n.push_head(200);
         assert_eq!(n.length(), 2);
+
+        let n = list![1, 2, 3, 4, 5, 6, 7, 8];
+        assert_eq!(n.length(), 8);
+    }
+
+    #[test]
+    fn test_last()
+    {
+        assert_eq!(list![1, 2, 3, 4, 5, 6, 7, 8].last(), 8);
+        assert_eq!(list![1].last(), 1);
+    }
+
+    #[test]
+    fn test_nth()
+    {
+        assert_eq!(list![1, 2, 3, 4, 5, 6, 7, 8].nth(0), Some(1));
+        assert_eq!(list![1, 2, 3, 4, 5, 6, 7, 8].nth(7), Some(8));
+        assert_eq!(list![1].nth(100), None);
     }
 
     #[test]

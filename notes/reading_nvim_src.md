@@ -68,8 +68,16 @@ Code Overview(リンク一覧を参照)にソース全体の説明が書いて�
         * シェル上に表示されているもの全体を指してスクリーンと言っている？
     * `set_init_2`
     * `init_highlight`
-* `"-u NONE`があれば`loadplugins`をfalseにする
-* `source_startup_scripts`関数でユーザスクリプトを読み込み
-    * `do_user_initialization`: Source vimrc or do other user initialization
-    * `do_source`: Read the file "fname" and execute its lines as EX commands.
-
+    * `"-u NONE`があれば`loadplugins`をfalseにする
+    * `source_startup_scripts`関数でユーザスクリプトを読み込み
+        * `do_user_initialization`: Source vimrc or do other user initialization
+        * `do_source`: Read the file "fname" and execute its lines as EX commands.
+    * `load_plugins`
+        * 全プラグイン読み込み
+    * `set_init_3`
+    * `shada_read_everything`
+    * `setmouse`
+    * `create_windows`
+    * `normal_enter`
+        * ノーマルモードのステートに入る
+        * 以降mainには戻らない

@@ -1,5 +1,4 @@
 // http://rustbyexample.com/custom_types/enum/testcase_linked_list.html
-#![recursion_limit="1024"]
 #![feature(box_syntax, box_patterns)]
 use std::ops::Add;
 use List::*;
@@ -12,11 +11,31 @@ enum List<T> {
 }
 
 
-macro_rules! list{
+macro_rules! reverse {
+    ($macro:ident, $( $v:tt ),* ) => {
+        reverse!($macro, [$( $v )*] [])
+    };
+
+    ($macro:ident, [$head:tt $( $rest:tt )*] [$( $reversed:tt )*]) => {
+        reverse!($macro, [$( $rest )*] [$head $( $reversed )*])
+    };
+
+    ($macro:ident, [] [$( $reversed:tt )*]) => {
+        $macro!($( $reversed ),*)
+    };
+}
+
+macro_rules! list_sub {
     ($( $value:expr ),*) => {
         {
-            List::new()$(.push_back($value))*
+            List::new()$(.push_head($value))*
         }
+    };
+}
+
+macro_rules! list {
+    ($( $value:expr ),*) => {
+        reverse!(list_sub, $($value),*)
     };
 }
 

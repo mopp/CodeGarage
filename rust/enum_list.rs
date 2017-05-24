@@ -64,6 +64,14 @@ impl<T> List<T> {
         }
     }
 
+    fn pop_head(self) -> (Option<T>, List<T>)
+    {
+        match self {
+            Nil           => (None, Nil),
+            Node(v, box tail) => (Some(v), tail),
+        }
+    }
+
     fn length(&self) -> usize
     {
         match *self {
@@ -145,6 +153,32 @@ mod tests {
         assert_eq!(n, Node(100, Box::new(Nil)));
         let n = n.push_back(200);
         assert_eq!(n, Node(100, Box::new(Node(200, Box::new(Nil)))));
+    }
+
+    #[test]
+    fn test_pop_head()
+    {
+        let n = list![1, 2, 3, 4];
+
+        let (v, n) = n.pop_head();
+        assert_eq!(v, Some(1));
+        assert_eq!(n, list![2, 3, 4]);
+
+        let (v, n) = n.pop_head();
+        assert_eq!(v, Some(2));
+        assert_eq!(n, list![3, 4]);
+
+        let (v, n) = n.pop_head();
+        assert_eq!(v, Some(3));
+        assert_eq!(n, list![4]);
+
+        let (v, n) = n.pop_head();
+        assert_eq!(v, Some(4));
+        assert_eq!(n, Nil);
+
+        let (v, n) = n.pop_head();
+        assert_eq!(v, None);
+        assert_eq!(n, Nil);
     }
 
     #[test]

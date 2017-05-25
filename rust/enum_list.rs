@@ -67,8 +67,20 @@ impl<T> List<T> {
     fn pop_head(self) -> (Option<T>, List<T>)
     {
         match self {
-            Nil           => (None, Nil),
+            Nil               => (None, Nil),
             Node(v, box tail) => (Some(v), tail),
+        }
+    }
+
+    fn pop_tail(self) -> (Option<T>, List<T>)
+    {
+        match self {
+            Nil => (None, Nil),
+            Node(v, box Nil) => (Some(v), Nil),
+            Node(v, box tail) => {
+                let (opt_v, list) = tail.pop_tail();
+                (opt_v, list.push_head(v))
+            }
         }
     }
 
@@ -177,6 +189,32 @@ mod tests {
         assert_eq!(n, Nil);
 
         let (v, n) = n.pop_head();
+        assert_eq!(v, None);
+        assert_eq!(n, Nil);
+    }
+
+    #[test]
+    fn test_pop_tail()
+    {
+        let n = list![1, 2, 3, 4];
+
+        let (v, n) = n.pop_tail();
+        assert_eq!(v, Some(4));
+        assert_eq!(n, list![1, 2, 3]);
+
+        let (v, n) = n.pop_tail();
+        assert_eq!(v, Some(3));
+        assert_eq!(n, list![1, 2]);
+
+        let (v, n) = n.pop_tail();
+        assert_eq!(v, Some(2));
+        assert_eq!(n, list![1]);
+
+        let (v, n) = n.pop_tail();
+        assert_eq!(v, Some(1));
+        assert_eq!(n, Nil);
+
+        let (v, n) = n.pop_tail();
         assert_eq!(v, None);
         assert_eq!(n, Nil);
     }

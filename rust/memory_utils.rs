@@ -7,6 +7,7 @@ fn main()
     uninitialized_memory();
     align_of_memory();
     dispose_value();
+    forget_value();
 }
 
 
@@ -87,5 +88,48 @@ fn dispose_value()
     // borrowの先は解放されない
     drop(x);
 
-    v.push(4); // error: cannot borrow `v` as mutable because it is also borrowed as immutable
+    // v.push(4); // error: cannot borrow `v` as mutable because it is also borrowed as immutable
+}
+
+
+// * 値をリークさせる
+//     * デストラクタを実行せずに所有権を取って、忘れる
+//     * 例えばヒープやファイルハンドラなど、到達されない状態で永久に残る
+//     * もし、正確に破棄したいのであれば、`mem::drop`を使用する
+// * 安全性
+//     * Rustはデストラクタが必ず実行される保証をしないので、`forget`はunsafeではない
+fn forget_value()
+{
+    // 初期化されていない値のデストラクタを呼ぶことは未定義動作を引き起こす
+    // なので、以下のとき、もし初期化できなかった場合は、デストラクタを呼ばないように破棄する
+    unsafe {
+        let mut uninit_vec: Vec<u32> = mem::uninitialized();
+        let some_condition = false;
+
+        if some_condition {
+            ptr::write(&mut uninit_vec, Vec::new());
+        } else {
+            mem::forget(uninit_vec);
+        }
+    }
+
+
+    let x = &mut 100;
+    let y = &mut 999;
+    println!("x = {}, y = {}", x, y);
+    unsafe {
+        // スワップ用のメモリ領域を確保
+        let mut t: usize = mem::uninitialized();
+
+        // スワップ
+        ptr::copy_nonoverlapping(&*x, &mut t, 1);
+        ptr::copy_nonoverlapping(&*y, x, 1);
+        ptr::copy_nonoverlapping(&t, y, 1);
+
+        // ここで`y`と`t`は同じ領域を指している
+        // なので、`t`のデストラクタが呼ばれ、領域が破棄されると困るので`forget`を使う
+        // TODO: 破棄される例
+        mem::forget(t);
+    }
+    println!("x = {}, y = {}", x, y);
 }

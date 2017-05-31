@@ -133,3 +133,30 @@ fn forget_value()
     }
     println!("x = {}, y = {}", x, y);
 }
+
+
+// * 値の置き換えを、対象2つのデストラクタを実行することなく行う
+//     * 古い値は戻り値として返る
+fn replace_value()
+{
+    let mut v: Vec<i32> = vec![1, 2];
+
+    let old_v = mem::replace(&mut v, vec![3, 4, 5]);
+    assert_eq!(2, old_v.len());
+    assert_eq!(3, v.len());
+
+    // 構造体のフィールド入れ替えで有用
+    // またTは`Clone`を実装している必要はない
+    struct Buffer<T> { buf: Vec<T> }
+
+    impl<T> Buffer<T> {
+        fn get_and_reset(&mut self) -> Vec<T> {
+            // error: cannot move out of dereference of `&mut`-pointer
+            // let buf = self.buf;
+            // self.buf = Vec::new();
+            // buf
+
+            mem::replace(&mut self.buf, Vec::new())
+        }
+    }
+}

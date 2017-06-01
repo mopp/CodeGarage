@@ -163,6 +163,7 @@ fn replace_value()
 
 fn size_of()
 {
+    // 普通の型のサイズ
     assert_eq!(4, mem::size_of::<i32>());
     assert_eq!(8, mem::size_of::<i64>());
     assert_eq!(4, mem::size_of::<ObjA>());
@@ -171,4 +172,16 @@ fn size_of()
     assert_eq!(2, mem::size_of::<ObjD>());
     assert_eq!(6, mem::size_of::<ObjE>());
     assert_eq!(10, mem::size_of::<ObjF>());
+
+    assert_eq!(4, mem::size_of_val(&5i32));
+
+    let x: [u8; 13] = [0; 13];
+    let y: &[u8] = &x;
+    assert_eq!(13, mem::size_of_val(y));
+
+    unsafe {
+        // 参照先の値のサイズを返す
+        let x: &i64 = mem::uninitialized();
+        assert_eq!(8, mem::size_of_val(x));
+    }
 }

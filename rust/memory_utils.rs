@@ -1,30 +1,36 @@
 // https://doc.rust-lang.org/std/mem/index.html
 use std::{mem, ptr};
 
+#[allow(dead_code)]
 struct ObjA {
     i: i32
 }
 
+#[allow(dead_code)]
 struct ObjB {
     i: i32,
     j: i32
 }
 
+#[allow(dead_code)]
 struct ObjC {
     i: u8
 }
 
+#[allow(dead_code)]
 struct ObjD {
     i: u8,
     j: u8
 }
 
+#[allow(dead_code)]
 struct ObjE {
     i: u8,
     j: u8,
     k: i32,
 }
 
+#[allow(dead_code)]
 struct ObjF {
     i: u8,
     j: u8,
@@ -38,6 +44,8 @@ fn main()
     align_of_memory();
     dispose_value();
     forget_value();
+    replace_value();
+    size_of();
 }
 
 
@@ -80,7 +88,7 @@ fn dispose_value()
     // Error: value used here after move.
     // println!("{:?}", v);
 
-    let mut v = vec![1, 2, 3];
+    let v = vec![1, 2, 3];
     let x = &v[0];
 
     // explicitly drop the reference, but the borrow still exists
@@ -146,9 +154,11 @@ fn replace_value()
 
     // 構造体のフィールド入れ替えで有用
     // またTは`Clone`を実装している必要はない
+    #[allow(dead_code)]
     struct Buffer<T> { buf: Vec<T> }
 
     impl<T> Buffer<T> {
+        #[allow(dead_code)]
         fn get_and_reset(&mut self) -> Vec<T> {
             // error: cannot move out of dereference of `&mut`-pointer
             // let buf = self.buf;
@@ -170,8 +180,8 @@ fn size_of()
     assert_eq!(8, mem::size_of::<ObjB>());
     assert_eq!(1, mem::size_of::<ObjC>());
     assert_eq!(2, mem::size_of::<ObjD>());
-    assert_eq!(6, mem::size_of::<ObjE>());
-    assert_eq!(10, mem::size_of::<ObjF>());
+    assert_eq!(8, mem::size_of::<ObjE>());
+    assert_eq!(16, mem::size_of::<ObjF>());
 
     assert_eq!(4, mem::size_of_val(&5i32));
 

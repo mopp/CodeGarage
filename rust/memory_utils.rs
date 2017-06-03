@@ -46,6 +46,7 @@ fn main()
     forget_value();
     replace_value();
     size_of();
+    swap();
 }
 
 
@@ -194,4 +195,24 @@ fn size_of()
         let x: &i64 = mem::uninitialized();
         assert_eq!(8, mem::size_of_val(x));
     }
+}
+
+
+fn swap()
+{
+    let mut x = 5;
+    let mut y = 42;
+
+    // mutableな2つを破壊することなく交換する
+    mem::swap(&mut x, &mut y);
+
+    assert_eq!(42, x);
+    assert_eq!(5, y);
+
+    let mut v1 = vec![1, 2, 3];
+    let mut v2 = vec![4, 5, 6];
+    mem::swap(&mut v1, &mut v2);
+
+    assert_eq!(v1, vec![4, 5, 6]);
+    assert_eq!(v2, vec![1, 2, 3]);
 }

@@ -47,6 +47,7 @@ fn main()
     replace_value();
     size_of();
     swap();
+    transmute_copy();
 }
 
 
@@ -215,4 +216,31 @@ fn swap()
 
     assert_eq!(v1, vec![4, 5, 6]);
     assert_eq!(v2, vec![1, 2, 3]);
+}
+
+
+// コピーして、型を変換する
+// moveは起きない
+// 変換元の型と変換先の型のサイズが異なってもコンパイルエラーにはならないが、同じサイズであることが強く奨励される.
+// また、変換先の型のサイズが、変換元の型のサイズよりも大きいときは未定義動作を引き起こす
+fn transmute_copy()
+{
+    #[repr(packed)]
+    struct Foo {
+        bar: u8,
+    }
+
+    let foo_slice = [10u8];
+
+    unsafe {
+        let mut foo_struct: Foo = mem::transmute_copy(&foo_slice);
+        assert_eq!(foo_struct.bar, 10);
+
+        // コピーしたデータを変更
+        foo_struct.bar = 20;
+        assert_eq!(foo_struct.bar, 20);
+    }
+
+    // コピーなので大本は変わらない
+    assert_eq!(foo_slice, [10]);
 }

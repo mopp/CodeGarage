@@ -1,4 +1,5 @@
 // https://doc.rust-lang.org/std/mem/index.html
+#![feature(discriminant_value)]
 use std::{mem, ptr};
 
 #[allow(dead_code)]
@@ -48,6 +49,8 @@ fn main()
     size_of();
     swap();
     transmute_copy();
+    zeroed();
+    discriminant();
 }
 
 
@@ -243,4 +246,28 @@ fn transmute_copy()
 
     // コピーなので大本は変わらない
     assert_eq!(foo_slice, [10]);
+}
+
+
+// uninitializedで確保した領域をゼロ初期化したのと同じ
+fn zeroed()
+{
+    let x: i32 = unsafe { mem::zeroed() };
+    assert_eq!(0, x);
+}
+
+
+
+// Enumを一意に識別する
+fn discriminant()
+{
+    enum Foo {
+        A(&'static str),
+        B(i32),
+        C(i32)
+    }
+
+    assert!(mem::discriminant(&Foo::A("bar")) == mem::discriminant(&Foo::A("baz")));
+    assert!(mem::discriminant(&Foo::B(1))     == mem::discriminant(&Foo::B(2)));
+    assert!(mem::discriminant(&Foo::B(3))     != mem::discriminant(&Foo::C(3)));
 }

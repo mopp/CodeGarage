@@ -46,7 +46,7 @@ impl Cpu {
     }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq, Eq)]
 enum Instruction {
     Nop0   = 0x00, // no operation
     Nop1   = 0x01, // no operation
@@ -166,44 +166,67 @@ impl Universe {
         }
     }
 
+    fn search_templete(&self, template: &[Instruction], begin_addr: usize)
+    {
+        let complement_template: Vec<Instruction> = template.clone().into_iter().map(|&x| {
+            use Instruction::*;
+            match x {
+                Nop0 => Nop1,
+                Nop1 => Nop0,
+                _ => panic!("invalid instrunction"),
+            }
+        }).collect();
+
+        const SEARCH_LIMIT: usize = 1000;
+        // fn find_subsequence(haystack: &[u8], needle: &[u8]) -> Option<usize> {
+        //     haystack.windows(needle.len()).position(|window| window == needle)
+        // }
+
+        let end_addr = begin_addr + SEARCH_LIMIT;
+        let search_region = &self.genome_pool[begin_addr..(end_addr)];
+
+        let t = search_region.windows(complement_template.len()).position(|window| {
+            let cnt = 0;
+            for i in window.iter() {
+                if complement_template[cnt] != *i {
+                    return false;
+                }
+            }
+            true
+        });
+        println!("{:?}", t);
+    }
+
     fn execute(&self, cpu: &mut Cpu, ins: Instruction)
     {
         use Instruction::*;
+        let (ax, bx, cx, dx) = (cpu.ax, cpu.bx, cpu.cx, cpu.dx);
         match ins {
             Nop0   => {},
             Nop1   => {},
-            Or1    => cpu.cx = cpu.cx ^ 1,
-            Shl    => cpu.cx = cpu.cx << 1,
+            Or1    => cpu.cx = cx ^ 1,
+            Shl    => cpu.cx = cx << 1,
             Zero   => cpu.cx = 0,
             IfCz   => {
-                // TODO
+                if cx != 0 {
+                    // Skip the next instruction.
+                    cpu.ip += 1;
+                }
             },
-            SubAb  => cpu.cx = cpu.ax - cpu.bx,
-            SubAc  => cpu.ax = cpu.ax - cpu.cx,
-            IncA   => cpu.ax = cpu.ax + 1,
-            IncB   => cpu.bx = cpu.bx + 1,
-            DecC   => cpu.cx = cpu.cx - 1,
-            IncC   => cpu.cx = cpu.cx + 1,
-            PushAx => {
-                let t = cpu.ax;
-                cpu.push(t);
-            },
-            PushBx => {
-                let t = cpu.bx;
-                cpu.push(t);
-            },
-            PushCx => {
-                let t = cpu.cx;
-                cpu.push(t);
-            },
-            PushDx => {
-                let t = cpu.dx;
-                cpu.push(t);
-            },
-            PopAx => cpu.ax = cpu.pop(),
-            PopBx => cpu.bx = cpu.pop(),
-            PopCx => cpu.cx = cpu.pop(),
-            PopDx => cpu.dx = cpu.pop(),
+            SubAb  => cpu.cx = ax - bx,
+            SubAc  => cpu.ax = ax - cx,
+            IncA   => cpu.ax = ax + 1,
+            IncB   => cpu.bx = bx + 1,
+            DecC   => cpu.cx = cx - 1,
+            IncC   => cpu.cx = cx + 1,
+            PushAx => cpu.push(ax),
+            PushBx => cpu.push(bx),
+            PushCx => cpu.push(cx),
+            PushDx => cpu.push(dx),
+            PopAx  => cpu.ax = cpu.pop(),
+            PopBx  => cpu.bx = cpu.pop(),
+            PopCx  => cpu.cx = cpu.pop(),
+            PopDx  => cpu.dx = cpu.pop(),
             Jmp => {
                 //TODO
             },
@@ -250,6 +273,10 @@ impl Universe {
             let ins = self.read_from_genome_pool(creature.genome_index, cpu.ip as usize, 1)[0];
             self.execute(cpu, ins);
             cpu.ip += 1;
+
+            if (cpu.ip as usize) == creature.genome_actual_size {
+                cpu.ip = 0;
+            }
 
             println!("CPU: {:?}", cpu);
         }

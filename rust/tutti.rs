@@ -1,9 +1,11 @@
 use std::collections::VecDeque;
+use std::mem;
 
 type Address             = u16;
 type Register            = Address;
 type InstructionWordSize = Address;
 
+#[derive(Debug)]
 struct Cpu {
     ax: Register,
     bx: Register,
@@ -123,7 +125,9 @@ impl Universe {
         match self.allocate_genome_pool() {
             None => panic!("no memory"),
             Some(i) => {
-                self.creatures.push_front(Creature::new(i));
+                let mut c = Creature::new(i);
+                c.genome_actual_size = instrunctions.len();
+                self.creatures.push_front(c);
                 self.write_to_genome_pool(i, 0, instrunctions);
             }
         }
@@ -236,8 +240,28 @@ impl Universe {
         }
     }
 
-    fn give_cpu_time(&self, c: &mut Creature)
+    fn give_cpu_time(&self, creature: &mut Creature)
     {
+        const SLICED_TIME: usize = 10;
+
+        let cpu = &mut creature.core;
+        for _ in 0..SLICED_TIME {
+            // fetch
+            let ins = self.read_from_genome_pool(creature.genome_index, cpu.ip as usize, 1)[0];
+            self.execute(cpu, ins);
+            cpu.ip += 1;
+
+            println!("CPU: {:?}", cpu);
+        }
+    }
+
+    fn works(&mut self)
+    {
+        let mut cs = mem::replace(&mut self.creatures, VecDeque::new());
+        for i in cs.iter_mut() {
+            self.give_cpu_time(i);
+        }
+        self.creatures = cs;
     }
 }
 
@@ -256,6 +280,7 @@ fn main() {
         Shl,
     ];
     univ.born_creature(&insts);
+    univ.works();
 }
 
 // void time_slice(int  ci)

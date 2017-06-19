@@ -1,5 +1,6 @@
 use std::collections::VecDeque;
 use std::mem;
+use std::ops::Range;
 
 type Address             = u16;
 type Register            = Address;
@@ -46,7 +47,7 @@ impl Cpu {
     }
 }
 
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 enum Instruction {
     Nop0   = 0x00, // no operation
     Nop1   = 0x01, // no operation
@@ -82,91 +83,117 @@ enum Instruction {
     Divide = 0x1F, // cell division
 }
 
+struct MemoryRegion {
+    addr: usize,
+    size: usize,
+}
+
+impl MemoryRegion {
+    fn new(addr: usize, size: usize) -> MemoryRegion
+    {
+        MemoryRegion {
+            addr: addr,
+            size: size,
+        }
+    }
+
+    fn end_addr(&self) -> usize
+    {
+        self.addr + self.size
+    }
+
+    fn range(&self) -> Range<usize>
+    {
+        self.addr..self.end_addr()
+    }
+}
+
 struct Creature {
     core: Cpu,
-    genome_index: usize,
-    genome_actual_size: usize,
+    genome: MemoryRegion,
 }
 
 impl Creature {
-    fn new(i: usize) -> Creature {
+    fn new(g: MemoryRegion) -> Creature {
         Creature {
             core: Cpu::new(),
-            genome_index: i,
-            genome_actual_size: 0,
+            genome: g,
         }
     }
 }
 
-// type MemoryWriteListener = Fn(GenomeRegion, &[Instruction])
-
-const UNIVERSE_TOTAL_GENOME_CAPACITY: usize = 6_0000;
-const GENOME_BLOCK_UNIT_SIZE: usize         = 500;
-const BITMAP_SIZE: usize                    = UNIVERSE_TOTAL_GENOME_CAPACITY / GENOME_BLOCK_UNIT_SIZE;
+const UNIVERSE_TOTAL_GENOME_CAPACITY: usize = 8 * 1024;
 
 struct Universe {
-    genome_pool: [Instruction; UNIVERSE_TOTAL_GENOME_CAPACITY],
-    bitmap: [bool; BITMAP_SIZE],
+    genome_soup: [Instruction; UNIVERSE_TOTAL_GENOME_CAPACITY],
+    free_regions: VecDeque<MemoryRegion>,
     creatures: VecDeque<Creature>,
 }
 
 impl Universe {
     fn new() -> Universe
     {
+        let soup = [Instruction::Nop0; UNIVERSE_TOTAL_GENOME_CAPACITY];
+        let mut free_regions = VecDeque::new();
+        free_regions.push_front(MemoryRegion::new(0, soup.len()));
+
         Universe {
-            genome_pool: [Instruction::Nop0; UNIVERSE_TOTAL_GENOME_CAPACITY],
-            bitmap: [false; BITMAP_SIZE],
+            genome_soup: soup,
+            free_regions: free_regions,
             creatures: VecDeque::new(),
         }
     }
 
-    fn born_creature(&mut self, instrunctions: &[Instruction])
+    fn generate_creature(&mut self, instrunctions: &[Instruction])
     {
-        match self.allocate_genome_pool() {
+        match self.allocate_genome_pool(instrunctions.len()) {
             None => panic!("no memory"),
-            Some(i) => {
-                let mut c = Creature::new(i);
-                c.genome_actual_size = instrunctions.len();
+            Some(genome_region) => {
+                let c = Creature::new(genome_region);
+                self.write_to_genome_pool(&c.genome, instrunctions);
                 self.creatures.push_front(c);
-                self.write_to_genome_pool(i, 0, instrunctions);
             }
         }
     }
 
-    fn allocate_genome_pool(&mut self) -> Option<usize>
+    fn allocate_genome_pool(&mut self, request_size: usize) -> Option<MemoryRegion>
     {
-        for i in 0..self.bitmap.len() {
-            if self.bitmap[i] == false {
-                self.bitmap[i] == true;
-                return Some(i);
+        let mut allocated_genome = None;
+
+        for v in self.free_regions.iter_mut() {
+            if request_size <= v.size {
+                let addr = v.addr;
+                v.addr += request_size;
+                v.size -= request_size;
+
+                allocated_genome = Some(MemoryRegion::new(addr, request_size));
+                break;
             }
         }
 
-        None
+        allocated_genome
     }
 
-    fn free_genome_pool(&mut self, i: usize)
+    fn free_genome_pool(&mut self, _: MemoryRegion)
     {
-        self.bitmap[i] = false;
+        // TODO
     }
 
-    fn read_from_genome_pool(&self, i: usize, addr: usize, size: usize) -> &[Instruction]
+    fn read_from_genome_pool(&self, r: &MemoryRegion) -> &[Instruction]
     {
-        let begin = i * GENOME_BLOCK_UNIT_SIZE + addr;
-        let end = begin + size;
-        &self.genome_pool[begin..end]
+        &self.genome_soup[r.range()]
     }
 
-    fn write_to_genome_pool(&mut self, i: usize, addr: usize, data: &[Instruction])
+    fn write_to_genome_pool(&mut self, r: &MemoryRegion, data: &[Instruction])
     {
-        let mut k = i * GENOME_BLOCK_UNIT_SIZE + addr;
-        for j in 0..data.len() {
-            self.genome_pool[k] = data[j];
-            k = k + 1;
+        // TODO: check write privilege.
+        let slice = &mut self.genome_soup[r.range()];
+        for i in 0..data.len() {
+            slice[i] = data[i];
         }
     }
 
-    fn search_templete(&self, template: &[Instruction], begin_addr: usize)
+    fn search_complement_template(&self, template: &[Instruction], begin_addr: usize) -> Option<usize>
     {
         let complement_template: Vec<Instruction> = template.clone().into_iter().map(|&x| {
             use Instruction::*;
@@ -178,23 +205,46 @@ impl Universe {
         }).collect();
 
         const SEARCH_LIMIT: usize = 1000;
-        // fn find_subsequence(haystack: &[u8], needle: &[u8]) -> Option<usize> {
-        //     haystack.windows(needle.len()).position(|window| window == needle)
-        // }
+        let r = MemoryRegion::new(begin_addr, SEARCH_LIMIT);
+        let search_region = &self.genome_soup[r.range()];
 
-        let end_addr = begin_addr + SEARCH_LIMIT;
-        let search_region = &self.genome_pool[begin_addr..(end_addr)];
-
-        let t = search_region.windows(complement_template.len()).position(|window| {
-            let cnt = 0;
+        search_region.windows(complement_template.len()).position(|window| {
+            let mut cnt = 0;
             for i in window.iter() {
                 if complement_template[cnt] != *i {
                     return false;
                 }
+                cnt += 1;
             }
             true
-        });
-        println!("{:?}", t);
+        })
+    }
+
+    fn search_template(&self, addr: usize, is_forward: bool) -> Option<&[Instruction]>
+    {
+    }
+
+    fn extract_template(&self, begin_addr: usize) -> Option<Vec<Instruction>>
+    {
+        use Instruction::*;
+        let is_nop = |x: Instruction| (x == Nop0) || (x == Nop1);
+
+        if is_nop(self.genome_soup[begin_addr]) == false {
+            return None;
+        }
+
+        let search_region = MemoryRegion::new(begin_addr, self.genome_soup.len());
+        let mut extracted_template = Vec::new();
+        let slice = &self.genome_soup[search_region.range()];
+        for i in slice {
+            if is_nop(*i) == false {
+                break;
+            }
+
+            extracted_template.push(*i);
+        }
+
+        Some(extracted_template)
     }
 
     fn execute(&self, cpu: &mut Cpu, ins: Instruction)
@@ -263,18 +313,25 @@ impl Universe {
         }
     }
 
+    fn fetch(&self, creature: &Creature) -> Instruction
+    {
+        let ip = creature.core.ip as usize;
+        self.read_from_genome_pool(&MemoryRegion::new(ip, ip + 1))[0]
+    }
+
     fn give_cpu_time(&self, creature: &mut Creature)
     {
         const SLICED_TIME: usize = 10;
 
-        let cpu = &mut creature.core;
         for _ in 0..SLICED_TIME {
             // fetch
-            let ins = self.read_from_genome_pool(creature.genome_index, cpu.ip as usize, 1)[0];
+            let ins = self.fetch(creature);
+
+            let cpu = &mut creature.core;
             self.execute(cpu, ins);
             cpu.ip += 1;
 
-            if (cpu.ip as usize) == creature.genome_actual_size {
+            if (cpu.ip as usize) == creature.genome.size {
                 cpu.ip = 0;
             }
 
@@ -306,21 +363,37 @@ fn main() {
         Shl,
         Shl,
     ];
-    univ.born_creature(&insts);
+    univ.generate_creature(&insts);
     univ.works();
 }
 
-// void time_slice(int  ci)
-// {   Pcells  ce; /* pointer to the array of cell structures */
-//     char    i;  /* instruction from soup */
-//     int     di; /* decoded instruction */
-//     int     j, size_slice;
-//     ce = cells + ci;
-//     for(j = 0; j < size_slice; j++)
-//     {   i = fetch(ce->c.ip); /* fetch instruction from soup, at address ip */
-//         di = decode(i);      /* decode the fetched instruction */
-//         execute(di, ci);     /* execute the decoded instruction */
-//         increment_ip(di,ce); /* move instruction pointer to next instruction */
-//         system_work(); /* opportunity to extract information */
-//     }
-// }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_search_template()
+    {
+    }
+
+    #[test]
+    fn test_extract_template()
+    {
+        use Instruction::*;
+
+        let mut univ = Universe::new();
+        let insts = [
+            Nop1, Nop1, Nop1, Nop1,
+            Zero,  Or1,  Shl,  Shl,
+            Nop1, Nop1, Nop0, Nop0,
+            Nop0, Nop1, Nop1, Nop1,
+            Zero, Zero, Zero, Zero,
+            Nop0, Nop1, Nop1, Nop1,
+        ];
+        univ.write_to_genome_pool(&MemoryRegion::new(0, insts.len()), &insts);
+
+        assert_eq!(univ.extract_template(0), Some(vec![Nop1, Nop1, Nop1, Nop1]));
+        // assert_eq!(univ.extract_template(4), Some(vec![Nop1, Nop1, Nop0, Nop0, Nop0, Nop1, Nop1, Nop1]));
+    }
+}

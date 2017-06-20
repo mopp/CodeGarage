@@ -83,6 +83,13 @@ enum Instruction {
     Divide = 0x1F, // cell division
 }
 
+impl Instruction {
+    fn is_nop(x: Instruction) -> bool
+    {
+        (x == Instruction::Nop0) || (x == Instruction::Nop1)
+    }
+}
+
 struct MemoryRegion {
     addr: usize,
     size: usize,
@@ -220,16 +227,53 @@ impl Universe {
         })
     }
 
-    fn search_template(&self, addr: usize, is_forward: bool) -> Option<&[Instruction]>
+    fn search_template_begin(&self, addr: usize, size: usize, is_forward: bool) -> Option<usize>
     {
+        let range =
+            match is_forward {
+                true  => addr..(addr + size),
+                false => (addr - size + 1)..(addr + 1),
+            };
+
+        for (i, &x) in self.genome_soup[range].iter().enumerate() {
+            if Instruction::is_nop(x) {
+                return Some(i);
+            }
+        }
+
+        None
+    }
+
+    fn search_template(&self, r: &MemoryRegion, is_forward: bool) -> Option<&[Instruction]>
+    {
+        let begin_index = self.genome_soup[r.range()]
+            .iter()
+            .position(|&x| Instruction::is_nop(x) == true);
+        let begin_addr = match begin_index {
+            Some(i) => r.addr + i,
+            None => return None,
+        };
+
+        if begin_addr == r.end_addr() {
+            return Some(&self.genome_soup[begin_addr..begin_addr]);
+        }
+
+        let end_index = self.genome_soup[(begin_addr + 1)..r.end_addr()]
+            .iter()
+            .position(|&x| Instruction::is_nop(x) == false);
+
+        let end_addr =
+            match end_index {
+                Some(i) => begin_addr + i + 1,
+                None => r.end_addr(),
+            };
+
+        Some(&self.genome_soup[begin_addr..end_addr])
     }
 
     fn extract_template(&self, begin_addr: usize) -> Option<Vec<Instruction>>
     {
-        use Instruction::*;
-        let is_nop = |x: Instruction| (x == Nop0) || (x == Nop1);
-
-        if is_nop(self.genome_soup[begin_addr]) == false {
+        if Instruction::is_nop(self.genome_soup[begin_addr]) == false {
             return None;
         }
 
@@ -237,7 +281,7 @@ impl Universe {
         let mut extracted_template = Vec::new();
         let slice = &self.genome_soup[search_region.range()];
         for i in slice {
-            if is_nop(*i) == false {
+            if Instruction::is_nop(*i) == false {
                 break;
             }
 
@@ -375,6 +419,27 @@ mod tests {
     #[test]
     fn test_search_template()
     {
+        use Instruction::*;
+
+        let mut univ = Universe::new();
+        let insts = [
+            Nop1, Nop1, Nop1, Nop1,
+            Zero,  Or1,  Shl,  Shl,
+            Nop1, Nop1, Nop0, Nop0,
+            Nop0, Nop1, Nop1, Nop1,
+            Zero, Zero, Zero, Zero,
+            Nop0, Nop1, Nop1, Nop1,
+            Zero, Zero, Zero, Zero,
+            Nop0, Nop1, Nop1, Nop1,
+        ];
+        univ.write_to_genome_pool(&MemoryRegion::new(0, insts.len()), &insts);
+
+        assert_eq!(univ.search_template(&MemoryRegion::new(0, insts.len()), true), Some(&insts[0..4]));
+        assert_eq!(univ.search_template(&MemoryRegion::new(4, insts.len() - 4), true), Some(&insts[8..16]));
+        assert_eq!(univ.search_template(&MemoryRegion::new(16, 8), true), Some(&insts[20..24]));
+        assert_eq!(univ.search_template(&MemoryRegion::new(24, 4), true), None);
+        assert_eq!(univ.search_template(&MemoryRegion::new(28, 4), true), Some(&insts[28..32]));
+        assert_eq!(univ.search_template(&MemoryRegion::new(0, 1), true), Some(&insts[0..1]));
     }
 
     #[test]

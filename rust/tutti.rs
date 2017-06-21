@@ -200,6 +200,54 @@ impl Universe {
         }
     }
 
+    fn search_template(&self, addr: usize, size: usize, is_search_begin: bool, is_forward: bool) -> Option<usize>
+    {
+        let v: Vec<(usize, &Instruction)> =
+            match is_forward {
+                true  => self.genome_soup[addr..(addr + size)].iter().enumerate().collect(),
+                false => self.genome_soup[(addr - size + 1)..(addr + 1)].iter().rev().enumerate().collect(),
+            };
+
+        for (i, &x) in v {
+            if Instruction::is_nop(x) != is_search_begin {
+                continue;
+            }
+
+            return
+                match is_search_begin {
+                    true  => Some(i),
+                    false => {
+                        match i {
+                            0 => Some(0),
+                            _ => Some(i - 1)
+                        }
+                    }
+                };
+        }
+
+        None
+    }
+
+    fn search_template_begin_forward(&self, addr: usize, size: usize) -> Option<usize>
+    {
+        self.search_template(addr, size, true, true)
+    }
+
+    fn search_template_end_forward(&self, addr: usize, size: usize) -> Option<usize>
+    {
+        self.search_template(addr, size, false, true)
+    }
+
+    fn search_template_begin_backward(&self, addr: usize, size: usize) -> Option<usize>
+    {
+        self.search_template(addr, size, true, false)
+    }
+
+    fn search_template_end_backward(&self, addr: usize, size: usize) -> Option<usize>
+    {
+        self.search_template(addr, size, false, false)
+    }
+
     fn search_complement_template(&self, template: &[Instruction], begin_addr: usize) -> Option<usize>
     {
         let complement_template: Vec<Instruction> = template.clone().into_iter().map(|&x| {
@@ -225,50 +273,6 @@ impl Universe {
             }
             true
         })
-    }
-
-    fn search_template_begin(&self, addr: usize, size: usize, is_forward: bool) -> Option<usize>
-    {
-        let v: Vec<(usize, &Instruction)> =
-            match is_forward {
-                true  => self.genome_soup[addr..(addr + size)].iter().enumerate().collect(),
-                false => self.genome_soup[(addr - size + 1)..(addr + 1)].iter().rev().enumerate().collect(),
-            };
-
-        for (i, &x) in v {
-            if Instruction::is_nop(x) {
-                return Some(i)
-            }
-        }
-
-        None
-    }
-
-    fn search_template(&self, r: &MemoryRegion, is_forward: bool) -> Option<&[Instruction]>
-    {
-        let begin_index = self.genome_soup[r.range()]
-            .iter()
-            .position(|&x| Instruction::is_nop(x) == true);
-        let begin_addr = match begin_index {
-            Some(i) => r.addr + i,
-            None => return None,
-        };
-
-        if begin_addr == r.end_addr() {
-            return Some(&self.genome_soup[begin_addr..begin_addr]);
-        }
-
-        let end_index = self.genome_soup[(begin_addr + 1)..r.end_addr()]
-            .iter()
-            .position(|&x| Instruction::is_nop(x) == false);
-
-        let end_addr =
-            match end_index {
-                Some(i) => begin_addr + i + 1,
-                None => r.end_addr(),
-            };
-
-        Some(&self.genome_soup[begin_addr..end_addr])
     }
 
     fn extract_template(&self, begin_addr: usize) -> Option<Vec<Instruction>>
@@ -417,32 +421,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_search_template_begin()
-    {
-        use Instruction::*;
-
-        let mut univ = Universe::new();
-        let insts = [
-            Nop1, Nop1, Nop1, Nop1,
-            Zero,  Or1,  Shl,  Shl,
-            Nop1, Nop1, Nop0, Nop0,
-            Nop0, Nop1, Nop1, Nop1,
-            Zero, Zero, Zero, Zero,
-            Nop0, Nop1, Nop1, Nop1,
-            Zero, Zero, Zero, Zero,
-            Nop0, Nop1, Nop1, Nop1,
-        ];
-        univ.write_to_genome_pool(&MemoryRegion::new(0, insts.len()), &insts);
-
-        assert_eq!(univ.search_template_begin(0, 1000, true), Some(0));
-        assert_eq!(univ.search_template_begin(6, 1000, true), Some(2));
-        assert_eq!(univ.search_template_begin(6, 2, true), None);
-        assert_eq!(univ.search_template_begin(7, 7, false), Some(4));
-        assert_eq!(univ.search_template_begin(31, 7, false), Some(0));
-        assert_eq!(univ.search_template_begin(27, 7, false), Some(4));
-    }
-
-    #[test]
     fn test_search_template()
     {
         use Instruction::*;
@@ -460,12 +438,20 @@ mod tests {
         ];
         univ.write_to_genome_pool(&MemoryRegion::new(0, insts.len()), &insts);
 
-        assert_eq!(univ.search_template(&MemoryRegion::new(0, insts.len()), true), Some(&insts[0..4]));
-        assert_eq!(univ.search_template(&MemoryRegion::new(4, insts.len() - 4), true), Some(&insts[8..16]));
-        assert_eq!(univ.search_template(&MemoryRegion::new(16, 8), true), Some(&insts[20..24]));
-        assert_eq!(univ.search_template(&MemoryRegion::new(24, 4), true), None);
-        assert_eq!(univ.search_template(&MemoryRegion::new(28, 4), true), Some(&insts[28..32]));
-        assert_eq!(univ.search_template(&MemoryRegion::new(0, 1), true), Some(&insts[0..1]));
+        assert_eq!(univ.search_template(0,  10, true, true),  Some(0));
+        assert_eq!(univ.search_template(6,  10, true, true),  Some(2));
+        assert_eq!(univ.search_template(6,   2, true, true),  None);
+        assert_eq!(univ.search_template(7,   7, true, false), Some(4));
+        assert_eq!(univ.search_template(31, 10, true, false), Some(0));
+        assert_eq!(univ.search_template(27, 10, true, false), Some(4));
+
+        assert_eq!(univ.search_template(7,   6, false, true),  Some(0));
+        assert_eq!(univ.search_template(6,  10, false, true),  Some(0));
+        assert_eq!(univ.search_template(8,  10, false, true),  Some(7));
+        assert_eq!(univ.search_template(7,   7, false, false), Some(0));
+        assert_eq!(univ.search_template(31, 10, false, false), Some(3));
+        assert_eq!(univ.search_template(27, 10, false, false), Some(0));
+        assert_eq!(univ.search_template(31,  3, false, false), None);
     }
 
     #[test]

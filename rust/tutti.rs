@@ -229,15 +229,15 @@ impl Universe {
 
     fn search_template_begin(&self, addr: usize, size: usize, is_forward: bool) -> Option<usize>
     {
-        let range =
+        let v: Vec<(usize, &Instruction)> =
             match is_forward {
-                true  => addr..(addr + size),
-                false => (addr - size + 1)..(addr + 1),
+                true  => self.genome_soup[addr..(addr + size)].iter().enumerate().collect(),
+                false => self.genome_soup[(addr - size + 1)..(addr + 1)].iter().rev().enumerate().collect(),
             };
 
-        for (i, &x) in self.genome_soup[range].iter().enumerate() {
+        for (i, &x) in v {
             if Instruction::is_nop(x) {
-                return Some(i);
+                return Some(i)
             }
         }
 
@@ -415,6 +415,32 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_search_template_begin()
+    {
+        use Instruction::*;
+
+        let mut univ = Universe::new();
+        let insts = [
+            Nop1, Nop1, Nop1, Nop1,
+            Zero,  Or1,  Shl,  Shl,
+            Nop1, Nop1, Nop0, Nop0,
+            Nop0, Nop1, Nop1, Nop1,
+            Zero, Zero, Zero, Zero,
+            Nop0, Nop1, Nop1, Nop1,
+            Zero, Zero, Zero, Zero,
+            Nop0, Nop1, Nop1, Nop1,
+        ];
+        univ.write_to_genome_pool(&MemoryRegion::new(0, insts.len()), &insts);
+
+        assert_eq!(univ.search_template_begin(0, 1000, true), Some(0));
+        assert_eq!(univ.search_template_begin(6, 1000, true), Some(2));
+        assert_eq!(univ.search_template_begin(6, 2, true), None);
+        assert_eq!(univ.search_template_begin(7, 7, false), Some(4));
+        assert_eq!(univ.search_template_begin(31, 7, false), Some(0));
+        assert_eq!(univ.search_template_begin(27, 7, false), Some(4));
+    }
 
     #[test]
     fn test_search_template()

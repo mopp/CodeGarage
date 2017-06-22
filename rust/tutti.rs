@@ -334,7 +334,7 @@ impl Universe {
     }
 
 
-    fn execute(&self, cpu: &mut Cpu, ins: Instruction)
+    fn execute(&mut self, cpu: &mut Cpu, ins: Instruction)
     {
         use Instruction::*;
         let (ax, bx, cx, dx) = (cpu.ax, cpu.bx, cpu.cx, cpu.dx);
@@ -364,13 +364,18 @@ impl Universe {
             PopBx  => cpu.bx = cpu.pop(),
             PopCx  => cpu.cx = cpu.pop(),
             PopDx  => cpu.dx = cpu.pop(),
-            Jmp | Jmpb => {
+            Jmp | Jmpb | Call => {
                 let addr = cpu.ip as usize + 1;
                 let template =
                     match self.extract_template(addr, 8) {
                         Some(v) => v,
                         None => panic!("Nop0/Nop1 have to be placed after Jmp/Jmpb instruction."),
                     };
+
+                if ins == Call {
+                    let ip = cpu.ip;
+                    cpu.push(ip + 1);
+                }
 
                 let is_forward = ins == Jmp;
                 match self.search_complement_template(template, addr, is_forward) {
@@ -388,15 +393,8 @@ impl Universe {
                     }
                 }
             },
-            Call => {
-                let addr = cpu.ip as usize + 1;
-                let template =
-                    match self.extract_template(addr, 8) {
-                        Some(v) => v,
-                        None => panic!("Nop0/Nop1 have to be placed after Call instruction."),
-                    };
-
-                cpu.push(cpu.ip)
+            Ret => {
+                cpu.ip = cpu.pop();
             },
             MovCd => {
                 cpu.dx = cpu.cx
@@ -405,7 +403,8 @@ impl Universe {
                 cpu.bx = cpu.ax
             },
             MovIab => {
-                // TODO
+                let ins = self.read_from_genome_pool(&MemoryRegion::new(bx as usize, bx as usize+ 1))[0];
+                self.write_to_genome_pool(&MemoryRegion::new(ax as usize, ax as usize+ 1), &[ins]);
             },
             Adr => {
                 // TODO
@@ -421,8 +420,7 @@ impl Universe {
             },
             Divide => {
                 // TODO
-            },
-            _  => panic!("No implementation")
+            }
         }
     }
 
@@ -432,7 +430,7 @@ impl Universe {
         self.read_from_genome_pool(&MemoryRegion::new(ip, ip + 1))[0]
     }
 
-    fn one_instruction_cycle(&self, creature: &mut Creature)
+    fn one_instruction_cycle(&mut self, creature: &mut Creature)
     {
         // Fetch
         let ins = self.fetch(creature);

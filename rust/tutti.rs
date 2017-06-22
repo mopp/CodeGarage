@@ -1,6 +1,7 @@
 use std::collections::VecDeque;
 use std::mem;
 use std::ops::Range;
+use std::fmt;
 
 type Address             = u16;
 type Register            = Address;
@@ -16,6 +17,16 @@ struct Cpu {
     ip: Register,
     flags: u8,
     stack: [Register; 10],
+}
+
+impl fmt::Display for Cpu {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let s1 = format!("ax = 0x{:02X}, bx = 0x{:02X}, cx = 0x{:02X}, dx = 0x{:02X}, ", self.ax, self.bx, self.cx, self.dx);
+        let s2 = format!("ip = 0x{:02X}, sp = 0x{:02X}, ", self.ip, self.sp);
+        let s3 = format!("flags = 0x{:02X}", self.flags);
+
+        write!(f, "{}{}{}", s1, s2, s3)
+    }
 }
 
 impl Cpu {
@@ -248,52 +259,80 @@ impl Universe {
         self.search_template(addr, size, false, false)
     }
 
-    fn search_complement_template(&self, template: &[Instruction], begin_addr: usize) -> Option<usize>
+    fn search_complement_template(&self, template: &[Instruction], begin_addr: usize, is_forward: bool) -> Option<usize>
     {
-        let complement_template: Vec<Instruction> = template.clone().into_iter().map(|&x| {
-            use Instruction::*;
-            match x {
-                Nop0 => Nop1,
-                Nop1 => Nop0,
-                _ => panic!("invalid instrunction"),
-            }
-        }).collect();
-
-        const SEARCH_LIMIT: usize = 1000;
-        let r = MemoryRegion::new(begin_addr, SEARCH_LIMIT);
-        let search_region = &self.genome_soup[r.range()];
-
-        search_region.windows(complement_template.len()).position(|window| {
-            let mut cnt = 0;
-            for i in window.iter() {
-                if complement_template[cnt] != *i {
-                    return false;
+        let complement_template: Vec<Instruction> = template
+            .clone()
+            .into_iter()
+            .map(|&x| {
+                use Instruction::*;
+                match x {
+                    Nop0 => Nop1,
+                    Nop1 => Nop0,
+                    _    => panic!("invalid instrunction"),
                 }
-                cnt += 1;
-            }
-            true
-        })
+            })
+        .collect();
+
+        const SEARCH_LIMIT: usize = 32;
+        let (begin_addr, end_addr) =
+            match is_forward {
+                true => {
+                    let t = begin_addr + SEARCH_LIMIT;
+                    let l = self.genome_soup.len();
+                    let e =
+                        if t < l {
+                            t
+                        } else {
+                            l
+                        };
+                    (begin_addr, e)
+                },
+                false => {
+                    let b =
+                        if SEARCH_LIMIT <= begin_addr {
+                            begin_addr - SEARCH_LIMIT
+                        } else {
+                            0
+                        };
+                    (b, begin_addr + 1)
+                }
+            };
+
+        let f = |window| complement_template.as_slice() == window;
+        let slice = &self.genome_soup[begin_addr..end_addr];
+        let len = complement_template.len();
+
+        match is_forward {
+            true  => slice.windows(len).position(f),
+            false => slice.windows(len).rposition(f).map(|x| x - len),
+        }
     }
 
-    fn extract_template(&self, begin_addr: usize) -> Option<Vec<Instruction>>
+    fn extract_template(&self, addr: usize, size: usize) -> Option<&[Instruction]>
     {
-        if Instruction::is_nop(self.genome_soup[begin_addr]) == false {
+        let target_region = self.read_from_genome_pool(&MemoryRegion::new(addr, size));
+        if Instruction::is_nop(target_region[0]) == false {
             return None;
         }
 
-        let search_region = MemoryRegion::new(begin_addr, self.genome_soup.len());
-        let mut extracted_template = Vec::new();
-        let slice = &self.genome_soup[search_region.range()];
-        for i in slice {
-            if Instruction::is_nop(*i) == false {
-                break;
-            }
+        // Find the tail of the template.
+        let head_index = 0;
+        let tail_index = target_region
+            .iter()
+            .position(|&x| Instruction::is_nop(x) == false)
+            .unwrap_or(target_region.len() - 1);
 
-            extracted_template.push(*i);
-        }
+        let range =
+            if head_index == tail_index {
+                head_index..(head_index + 1)
+            } else {
+                head_index..tail_index
+            };
 
-        Some(extracted_template)
+        Some(&target_region[range])
     }
+
 
     fn execute(&self, cpu: &mut Cpu, ins: Instruction)
     {
@@ -325,13 +364,39 @@ impl Universe {
             PopBx  => cpu.bx = cpu.pop(),
             PopCx  => cpu.cx = cpu.pop(),
             PopDx  => cpu.dx = cpu.pop(),
-            Jmp => {
-                //TODO
-            },
-            Jmpb => {
-                //TODO
+            Jmp | Jmpb => {
+                let addr = cpu.ip as usize + 1;
+                let template =
+                    match self.extract_template(addr, 8) {
+                        Some(v) => v,
+                        None => panic!("Nop0/Nop1 have to be placed after Jmp/Jmpb instruction."),
+                    };
+
+                let is_forward = ins == Jmp;
+                match self.search_complement_template(template, addr, is_forward) {
+                    None => {
+                        // jmp instruction is ignored.
+                    },
+                    Some(addr_diff) => {
+                        let len = template.len();
+                        cpu.ip =
+                            if is_forward {
+                                (addr + len - 1 + addr_diff) as u16
+                            } else {
+                                (addr + len - 1 - addr_diff) as u16
+                            };
+                    }
+                }
             },
             Call => {
+                let addr = cpu.ip as usize + 1;
+                let template =
+                    match self.extract_template(addr, 8) {
+                        Some(v) => v,
+                        None => panic!("Nop0/Nop1 have to be placed after Call instruction."),
+                    };
+
+                cpu.push(cpu.ip)
             },
             MovCd => {
                 cpu.dx = cpu.cx
@@ -367,31 +432,32 @@ impl Universe {
         self.read_from_genome_pool(&MemoryRegion::new(ip, ip + 1))[0]
     }
 
-    fn give_cpu_time(&self, creature: &mut Creature)
+    fn one_instruction_cycle(&self, creature: &mut Creature)
     {
-        const SLICED_TIME: usize = 10;
+        // Fetch
+        let ins = self.fetch(creature);
+        println!("Fetch: {:?}", ins);
 
-        for _ in 0..SLICED_TIME {
-            // fetch
-            let ins = self.fetch(creature);
+        // Execute
+        let cpu = &mut creature.core;
+        self.execute(cpu, ins);
+        println!("Execute: {}", cpu);
 
-            let cpu = &mut creature.core;
-            self.execute(cpu, ins);
-            cpu.ip += 1;
-
-            if (cpu.ip as usize) == creature.genome.size {
-                cpu.ip = 0;
-            }
-
-            println!("CPU: {:?}", cpu);
+        cpu.ip += 1;
+        if (cpu.ip as usize) == creature.genome.size {
+            cpu.ip = 0;
         }
     }
 
     fn works(&mut self)
     {
         let mut cs = mem::replace(&mut self.creatures, VecDeque::new());
-        for i in cs.iter_mut() {
-            self.give_cpu_time(i);
+        for c in cs.iter_mut() {
+            const SLICED_TIME: usize = 10;
+
+            for _ in 0..SLICED_TIME {
+                self.one_instruction_cycle(c);
+            }
         }
         self.creatures = cs;
     }
@@ -402,15 +468,28 @@ fn main() {
 
     let mut univ = Universe::new();
     let insts = [
+        Jmp,
         Nop1,
         Nop1,
         Nop1,
         Nop1,
         Zero,
         Or1,
+        Zero,
         Shl,
-        Shl,
-    ];
+        IncA,
+        Nop0,
+        Nop0,
+        Nop0,
+        Nop0,
+        IncB,
+        Jmpb,
+        Nop1,
+        Nop1,
+        Nop1,
+        Nop1,
+        Zero,
+        ];
     univ.generate_creature(&insts);
     univ.works();
 }
@@ -461,16 +540,30 @@ mod tests {
 
         let mut univ = Universe::new();
         let insts = [
-            Nop1, Nop1, Nop1, Nop1,
-            Zero,  Or1,  Shl,  Shl,
-            Nop1, Nop1, Nop0, Nop0,
-            Nop0, Nop1, Nop1, Nop1,
-            Zero, Zero, Zero, Zero,
-            Nop0, Nop1, Nop1, Nop1,
+            Jmp,
+            Nop1,
+            Nop1,
+            Nop1,
+            Nop1,
+        ];
+
+        univ.write_to_genome_pool(&MemoryRegion::new(0, insts.len()), &insts);
+        assert_eq!(univ.extract_template(1, insts.len()), Some(vec![Nop1, Nop1, Nop1, Nop1].as_slice()));
+
+        let insts = [
+            Nop1,
         ];
         univ.write_to_genome_pool(&MemoryRegion::new(0, insts.len()), &insts);
+        assert_eq!(univ.extract_template(0, insts.len()), Some(vec![Nop1].as_slice()));
 
-        assert_eq!(univ.extract_template(0), Some(vec![Nop1, Nop1, Nop1, Nop1]));
-        // assert_eq!(univ.extract_template(4), Some(vec![Nop1, Nop1, Nop0, Nop0, Nop0, Nop1, Nop1, Nop1]));
+        let insts = [
+            Nop0,
+            Nop0,
+            Nop0,
+            Nop0,
+            Zero,
+        ];
+        univ.write_to_genome_pool(&MemoryRegion::new(0, insts.len()), &insts);
+        assert_eq!(univ.extract_template(0, insts.len()), Some(vec![Nop0, Nop0, Nop0, Nop0].as_slice()));
     }
 }

@@ -132,7 +132,8 @@ struct Creature {
 }
 
 impl Creature {
-    fn new(g: MemoryRegion) -> Creature {
+    fn new(g: MemoryRegion) -> Creature
+    {
         Creature {
             core: Cpu::new(),
             genome: g,
@@ -309,6 +310,83 @@ impl Universe {
         }
     }
 
+    fn search_complement_addr(&self, addr: usize, is_forward: bool) -> Option<(usize, usize)>
+    {
+        self.extract_argument_template(addr)
+            .map(|template| {
+                template
+                    .clone()
+                    .into_iter()
+                    .map(|&x| {
+                        use Instruction::*;
+                        match x {
+                            Nop0 => Nop1,
+                            Nop1 => Nop0,
+                            _    => panic!("invalid instrunction"),
+                        }
+                    })
+                    .collect::<Vec<Instruction>>()
+            })
+            .and_then(|complement_template| {
+                let len = complement_template.len();
+                let is_equal_pattern = |window| complement_template == window;
+
+                match is_forward {
+                    true => {
+                        (&self.genome_soup[(addr + len)..self.genome_soup.len()])
+                            .windows(len)
+                            .position(is_equal_pattern)
+                            .map(|addr_diff| addr + len + addr_diff)
+                    },
+                    false => {
+                        (&self.genome_soup[0..addr])
+                            .windows(len)
+                            .rposition(is_equal_pattern)
+                            .map(|addr_diff| addr_diff)
+                    }
+                }
+                .map(|complement_addr| (complement_addr, len))
+            })
+    }
+
+    fn search_complement_addr_forward(&self, addr: usize) -> Option<(usize, usize)>
+    {
+        self.search_complement_addr(addr, true)
+    }
+
+    fn search_complement_addr_backward(&self, addr: usize) -> Option<(usize, usize)>
+    {
+        self.search_complement_addr(addr, false)
+    }
+
+    fn extract_argument_template(&self, addr: usize) -> Option<&[Instruction]>
+    {
+        // the addr have to be the beginning of the template you want to extract.
+        debug_assert_eq!(Instruction::is_nop(self.genome_soup[addr]), true);
+
+        let target_region = &self.genome_soup[addr..(self.genome_soup.len() - 1)];
+        target_region
+            .iter()
+            .position(|&x| Instruction::is_nop(x) == false)
+            .or(Some(target_region.len() - 1))
+            .map(|tail_index| &target_region[0..tail_index])
+    }
+
+    fn search_complement_template_addr(&self, addr: usize, size: usize, is_forward: bool) -> Option<usize>
+    {
+        self.extract_template(addr, size)
+            .and_then(|template| {
+                self.search_complement_template(template, addr, is_forward)
+                    .and_then(|v| Some((v, template.len())))
+            })
+        .map(|(addr_diff, template_len)| {
+            match is_forward {
+                true  => addr + template_len - 1 + addr_diff,
+                false => addr + template_len - 1 - addr_diff,
+            }
+        })
+    }
+
     fn extract_template(&self, addr: usize, size: usize) -> Option<&[Instruction]>
     {
         let target_region = self.read_from_genome_pool(&MemoryRegion::new(addr, size));
@@ -332,7 +410,6 @@ impl Universe {
 
         Some(&target_region[range])
     }
-
 
     fn execute(&mut self, cpu: &mut Cpu, ins: Instruction)
     {
@@ -365,43 +442,19 @@ impl Universe {
             PopCx  => cpu.cx = cpu.pop(),
             PopDx  => cpu.dx = cpu.pop(),
             Jmp | Jmpb | Call => {
-                let addr = cpu.ip as usize + 1;
-                let template =
-                    match self.extract_template(addr, 8) {
-                        Some(v) => v,
-                        None => panic!("Nop0/Nop1 have to be placed after Jmp/Jmpb instruction."),
-                    };
-
                 if ins == Call {
                     let ip = cpu.ip;
                     cpu.push(ip + 1);
                 }
 
-                let is_forward = ins == Jmp;
-                match self.search_complement_template(template, addr, is_forward) {
-                    None => {
-                        // jmp instruction is ignored.
-                    },
-                    Some(addr_diff) => {
-                        let len = template.len();
-                        cpu.ip =
-                            if is_forward {
-                                (addr + len - 1 + addr_diff) as u16
-                            } else {
-                                (addr + len - 1 - addr_diff) as u16
-                            };
-                    }
+                match self.search_complement_addr(cpu.ip as usize + 1, ins == Jmp) {
+                    None               => {},
+                    Some((addr, size)) => cpu.ip = (addr + size - 1) as u16,
                 }
             },
-            Ret => {
-                cpu.ip = cpu.pop();
-            },
-            MovCd => {
-                cpu.dx = cpu.cx
-            },
-            MovAb => {
-                cpu.bx = cpu.ax
-            },
+            Ret   => cpu.ip = cpu.pop(),
+            MovCd => cpu.dx = cpu.cx ,
+            MovAb => cpu.bx = cpu.ax,
             MovIab => {
                 let ins = self.read_from_genome_pool(&MemoryRegion::new(bx as usize, bx as usize+ 1))[0];
                 self.write_to_genome_pool(&MemoryRegion::new(ax as usize, ax as usize+ 1), &[ins]);
@@ -409,11 +462,10 @@ impl Universe {
             Adr => {
                 // TODO
             },
-            Adrb => {
-                // TODO
-            },
             Adrf => {
                 // TODO
+            },
+            Adrb => {
             },
             Mal => {
                 // TODO
@@ -563,5 +615,83 @@ mod tests {
         ];
         univ.write_to_genome_pool(&MemoryRegion::new(0, insts.len()), &insts);
         assert_eq!(univ.extract_template(0, insts.len()), Some(vec![Nop0, Nop0, Nop0, Nop0].as_slice()));
+    }
+
+    #[test]
+    fn test_extract_argument_template()
+    {
+        use Instruction::*;
+
+        let mut univ = Universe::new();
+        let insts = [
+            Jmp,
+            Nop0,
+            Nop1,
+            Jmp,
+            Nop0,
+            Jmp,
+            Nop1,
+            Nop1,
+            Nop1,
+            Nop1,
+            Zero, // Dummy to terminal the template.
+        ];
+
+        univ.write_to_genome_pool(&MemoryRegion::new(0, insts.len()), &insts);
+        assert_eq!(univ.extract_argument_template(1), Some(vec![Nop0, Nop1].as_slice()));
+        assert_eq!(univ.extract_argument_template(4), Some(vec![Nop0].as_slice()));
+        assert_eq!(univ.extract_argument_template(6), Some(vec![Nop1, Nop1, Nop1, Nop1].as_slice()));
+    }
+
+    #[test]
+    fn test_search_complement_addr()
+    {
+        use Instruction::*;
+
+        let mut univ = Universe::new();
+        let insts = [
+            Jmp,
+            Nop0,
+            Nop1,
+            Jmp,
+            Nop1,
+            Nop0,
+            Zero, // Dummy to terminal the template.
+        ];
+
+        univ.write_to_genome_pool(&MemoryRegion::new(0, insts.len()), &insts);
+        assert_eq!(univ.search_complement_addr_forward(1), Some((4, 2)));
+        assert_eq!(univ.search_complement_addr_forward(4), None);
+        assert_eq!(univ.search_complement_addr_backward(4), Some((1, 2)));
+        assert_eq!(univ.search_complement_addr_backward(1), None);
+
+        let insts = [
+            Zero, // Dummy to terminal the template.
+            Nop0,
+            Nop1,
+            Jmp,
+            Nop1,
+            Nop0,
+            Jmp,
+            Nop0,
+            Nop0,
+            Nop0,
+            Nop0,
+            Zero,
+            IncA,
+            IncA,
+            Jmp,
+            Nop1,
+            Nop1,
+            Nop1,
+            Nop1,
+            Zero, // Dummy to terminal the template.
+        ];
+        univ.write_to_genome_pool(&MemoryRegion::new(10, 10 + insts.len()), &insts);
+        assert_eq!(univ.search_complement_addr_forward(10 + 1), Some((10 + 4, 2)));
+        assert_eq!(univ.search_complement_addr_forward(10 + 7), Some((10 + 15, 4)));
+        assert_eq!(univ.search_complement_addr_backward(10 + 4), Some((11, 2)));
+        assert_eq!(univ.search_complement_addr_backward(10 + 7), None);
+        assert_eq!(univ.search_complement_addr_backward(10 + 15), Some((17, 4)));
     }
 }

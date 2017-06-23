@@ -1,11 +1,9 @@
 use std::collections::VecDeque;
+use std::fmt;
 use std::mem;
 use std::ops::Range;
-use std::fmt;
 
-type Address             = u16;
-type Register            = Address;
-type InstructionWordSize = Address;
+type Register = u16;
 
 #[derive(Debug)]
 struct Cpu {
@@ -212,104 +210,6 @@ impl Universe {
         }
     }
 
-    fn search_template(&self, addr: usize, size: usize, is_search_begin: bool, is_forward: bool) -> Option<usize>
-    {
-        let v: Vec<(usize, &Instruction)> =
-            match is_forward {
-                true  => self.genome_soup[addr..(addr + size)].iter().enumerate().collect(),
-                false => self.genome_soup[(addr - size + 1)..(addr + 1)].iter().rev().enumerate().collect(),
-            };
-
-        for (i, &x) in v {
-            if Instruction::is_nop(x) != is_search_begin {
-                continue;
-            }
-
-            return
-                match is_search_begin {
-                    true  => Some(i),
-                    false => {
-                        match i {
-                            0 => Some(0),
-                            _ => Some(i - 1)
-                        }
-                    }
-                };
-        }
-
-        None
-    }
-
-    fn search_template_begin_forward(&self, addr: usize, size: usize) -> Option<usize>
-    {
-        self.search_template(addr, size, true, true)
-    }
-
-    fn search_template_end_forward(&self, addr: usize, size: usize) -> Option<usize>
-    {
-        self.search_template(addr, size, false, true)
-    }
-
-    fn search_template_begin_backward(&self, addr: usize, size: usize) -> Option<usize>
-    {
-        self.search_template(addr, size, true, false)
-    }
-
-    fn search_template_end_backward(&self, addr: usize, size: usize) -> Option<usize>
-    {
-        self.search_template(addr, size, false, false)
-    }
-
-    fn search_complement_template(&self, template: &[Instruction], begin_addr: usize, is_forward: bool) -> Option<usize>
-    {
-        let complement_template: Vec<Instruction> = template
-            .clone()
-            .into_iter()
-            .map(|&x| {
-                use Instruction::*;
-                match x {
-                    Nop0 => Nop1,
-                    Nop1 => Nop0,
-                    _    => panic!("invalid instrunction"),
-                }
-            })
-        .collect();
-
-        const SEARCH_LIMIT: usize = 32;
-        let (begin_addr, end_addr) =
-            match is_forward {
-                true => {
-                    let t = begin_addr + SEARCH_LIMIT;
-                    let l = self.genome_soup.len();
-                    let e =
-                        if t < l {
-                            t
-                        } else {
-                            l
-                        };
-                    (begin_addr, e)
-                },
-                false => {
-                    let b =
-                        if SEARCH_LIMIT <= begin_addr {
-                            begin_addr - SEARCH_LIMIT
-                        } else {
-                            0
-                        };
-                    (b, begin_addr + 1)
-                }
-            };
-
-        let f = |window| complement_template.as_slice() == window;
-        let slice = &self.genome_soup[begin_addr..end_addr];
-        let len = complement_template.len();
-
-        match is_forward {
-            true  => slice.windows(len).position(f),
-            false => slice.windows(len).rposition(f).map(|x| x - len),
-        }
-    }
-
     fn search_complement_addr(&self, addr: usize, is_forward: bool) -> Option<(usize, usize)>
     {
         self.extract_argument_template(addr)
@@ -370,45 +270,6 @@ impl Universe {
             .position(|&x| Instruction::is_nop(x) == false)
             .or(Some(target_region.len() - 1))
             .map(|tail_index| &target_region[0..tail_index])
-    }
-
-    fn search_complement_template_addr(&self, addr: usize, size: usize, is_forward: bool) -> Option<usize>
-    {
-        self.extract_template(addr, size)
-            .and_then(|template| {
-                self.search_complement_template(template, addr, is_forward)
-                    .and_then(|v| Some((v, template.len())))
-            })
-        .map(|(addr_diff, template_len)| {
-            match is_forward {
-                true  => addr + template_len - 1 + addr_diff,
-                false => addr + template_len - 1 - addr_diff,
-            }
-        })
-    }
-
-    fn extract_template(&self, addr: usize, size: usize) -> Option<&[Instruction]>
-    {
-        let target_region = self.read_from_genome_pool(&MemoryRegion::new(addr, size));
-        if Instruction::is_nop(target_region[0]) == false {
-            return None;
-        }
-
-        // Find the tail of the template.
-        let head_index = 0;
-        let tail_index = target_region
-            .iter()
-            .position(|&x| Instruction::is_nop(x) == false)
-            .unwrap_or(target_region.len() - 1);
-
-        let range =
-            if head_index == tail_index {
-                head_index..(head_index + 1)
-            } else {
-                head_index..tail_index
-            };
-
-        Some(&target_region[range])
     }
 
     fn execute(&mut self, cpu: &mut Cpu, ins: Instruction)
@@ -548,74 +409,6 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn test_search_template()
-    {
-        use Instruction::*;
-
-        let mut univ = Universe::new();
-        let insts = [
-            Nop1, Nop1, Nop1, Nop1,
-            Zero,  Or1,  Shl,  Shl,
-            Nop1, Nop1, Nop0, Nop0,
-            Nop0, Nop1, Nop1, Nop1,
-            Zero, Zero, Zero, Zero,
-            Nop0, Nop1, Nop1, Nop1,
-            Zero, Zero, Zero, Zero,
-            Nop0, Nop1, Nop1, Nop1,
-        ];
-        univ.write_to_genome_pool(&MemoryRegion::new(0, insts.len()), &insts);
-
-        assert_eq!(univ.search_template(0,  10, true, true),  Some(0));
-        assert_eq!(univ.search_template(6,  10, true, true),  Some(2));
-        assert_eq!(univ.search_template(6,   2, true, true),  None);
-        assert_eq!(univ.search_template(7,   7, true, false), Some(4));
-        assert_eq!(univ.search_template(31, 10, true, false), Some(0));
-        assert_eq!(univ.search_template(27, 10, true, false), Some(4));
-
-        assert_eq!(univ.search_template(7,   6, false, true),  Some(0));
-        assert_eq!(univ.search_template(6,  10, false, true),  Some(0));
-        assert_eq!(univ.search_template(8,  10, false, true),  Some(7));
-        assert_eq!(univ.search_template(7,   7, false, false), Some(0));
-        assert_eq!(univ.search_template(31, 10, false, false), Some(3));
-        assert_eq!(univ.search_template(27, 10, false, false), Some(0));
-        assert_eq!(univ.search_template(31,  3, false, false), None);
-    }
-
-    #[test]
-    fn test_extract_template()
-    {
-        use Instruction::*;
-
-        let mut univ = Universe::new();
-        let insts = [
-            Jmp,
-            Nop1,
-            Nop1,
-            Nop1,
-            Nop1,
-        ];
-
-        univ.write_to_genome_pool(&MemoryRegion::new(0, insts.len()), &insts);
-        assert_eq!(univ.extract_template(1, insts.len()), Some(vec![Nop1, Nop1, Nop1, Nop1].as_slice()));
-
-        let insts = [
-            Nop1,
-        ];
-        univ.write_to_genome_pool(&MemoryRegion::new(0, insts.len()), &insts);
-        assert_eq!(univ.extract_template(0, insts.len()), Some(vec![Nop1].as_slice()));
-
-        let insts = [
-            Nop0,
-            Nop0,
-            Nop0,
-            Nop0,
-            Zero,
-        ];
-        univ.write_to_genome_pool(&MemoryRegion::new(0, insts.len()), &insts);
-        assert_eq!(univ.extract_template(0, insts.len()), Some(vec![Nop0, Nop0, Nop0, Nop0].as_slice()));
-    }
 
     #[test]
     fn test_extract_argument_template()

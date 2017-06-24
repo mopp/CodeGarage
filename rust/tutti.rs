@@ -172,7 +172,7 @@ impl Universe {
 
     fn generate_creature(&mut self, instructions: &[Instruction])
     {
-        match self.allocate_genome_pool(instructions.len()) {
+        match self.allocate_genome_soup(instructions.len()) {
             None => panic!("no memory"),
             Some(genome_region) => {
                 let c = Creature::new(genome_region);
@@ -182,7 +182,7 @@ impl Universe {
         }
     }
 
-    fn allocate_genome_pool(&mut self, request_size: usize) -> Option<MemoryRegion>
+    fn allocate_genome_soup(&mut self, request_size: usize) -> Option<MemoryRegion>
     {
         let mut allocated_genome = None;
 
@@ -200,9 +200,27 @@ impl Universe {
         allocated_genome
     }
 
-    fn free_genome_pool(&mut self, _: MemoryRegion)
+    fn free_genome_soup(&mut self, r: MemoryRegion)
     {
-        // TODO
+        for v in self.free_regions.iter_mut() {
+            if v.end_addr() == r.addr {
+                v.size += r.size;
+                return;
+            }
+        }
+
+        self.free_regions.push_front(r);
+    }
+
+    fn compute_genome_soup_free_rate(&self) -> f64
+    {
+        let used_genome = self.free_regions.iter().fold(0, |acc, ref x| acc + x.size) as f64;
+        (used_genome / (UNIVERSE_TOTAL_GENOME_CAPACITY as f64))
+    }
+
+    fn compute_genome_soup_used_rate(&self) -> f64
+    {
+        1.0 - self.compute_genome_soup_free_rate()
     }
 
     fn write_instructions(&mut self, addr: usize, src: &[Instruction])
@@ -349,7 +367,7 @@ impl Universe {
                 }
             },
             Mal => {
-                match self.allocate_genome_pool(cx as usize) {
+                match self.allocate_genome_soup(cx as usize) {
                     None => {},
                     Some(genome_region) => {
                         cpu.ax = genome_region.addr as u16;
@@ -377,11 +395,11 @@ impl Universe {
     {
         // Fetch
         let ins = self.fetch(creature);
-        println!("Fetch: {:?}", ins);
+        // println!("Fetch: {:?}", ins);
 
         // Execute
         self.execute(creature, ins);
-        println!("Execute: {}", creature.core);
+        // println!("Execute: {}", creature.core);
 
         let cpu = &mut creature.core;
         cpu.ip += 1;
@@ -390,16 +408,28 @@ impl Universe {
         }
     }
 
-    fn execute_all_creatures(&mut self, sliced_time: usize)
+    fn execute_all_creatures(&mut self, power: f64)
     {
         let mut cs = mem::replace(&mut self.creatures, VecDeque::new());
         for c in cs.iter_mut() {
-            for _ in 0..sliced_time {
+            let size = c.genome_region.size as f64;
+            let time_slice = size.powf(power).floor() as usize;
+            for _ in 0..time_slice {
                 self.one_instruction_cycle(c);
             }
         }
         cs.append(&mut self.creatures);
         self.creatures = cs;
+    }
+
+    fn wakeup_reaper_if_genome_usage_over(&mut self, threshold:f64)
+    {
+        while threshold < self.compute_genome_soup_used_rate() {
+            match self.creatures.pop_back() {
+                None         => panic!("!?"),
+                Some(target) => self.free_genome_soup(target.genome_region),
+            }
+        }
     }
 }
 
@@ -490,9 +520,12 @@ fn main() {
         IfCz,
     ];
     univ.generate_creature(&insts);
+
     loop {
-        univ.execute_all_creatures(80);
-        println!("univ.creatures.len() = {}", univ.creatures.len());
+        univ.execute_all_creatures(1.2);
+        univ.wakeup_reaper_if_genome_usage_over(0.8);
+        println!("# of creatures: {}", univ.creatures.len());
+        println!("Genome usage rate: {}", univ.compute_genome_soup_used_rate());
     }
 }
 

@@ -132,6 +132,7 @@ impl MemoryRegion {
 struct Creature {
     core: Cpu,
     genome_region: MemoryRegion,
+    daughter: Option<Box<Creature>>,
 }
 
 impl Creature {
@@ -142,6 +143,7 @@ impl Creature {
         Creature {
             core: core,
             genome_region: g,
+            daughter: None,
         }
     }
 }
@@ -273,9 +275,10 @@ impl Universe {
             .map(|tail_index| &target_region[0..tail_index])
     }
 
-    fn execute(&mut self, cpu: &mut Cpu, ins: Instruction)
+    fn execute(&mut self, creature: &mut Creature, ins: Instruction)
     {
         use Instruction::*;
+        let cpu = &mut creature.core;
         let (ax, bx, cx, dx) = (cpu.ax, cpu.bx, cpu.cx, cpu.dx);
         match ins {
             Nop0   => {},
@@ -346,10 +349,21 @@ impl Universe {
                 }
             },
             Mal => {
-                // TODO
+                match self.allocate_genome_pool(cx as usize) {
+                    None => {},
+                    Some(genome_region) => {
+                        cpu.ax = genome_region.addr as u16;
+                        creature.daughter = Some(Box::new(Creature::new(genome_region)));
+                    }
+                }
             },
             Divide => {
-                // TODO
+                if creature.daughter.is_some() {
+                    let daughter = creature.daughter.clone();
+                    creature.daughter = None;
+
+                    self.creatures.push_front(*daughter.unwrap());
+                }
             }
         }
     }
@@ -366,10 +380,10 @@ impl Universe {
         println!("Fetch: {:?}", ins);
 
         // Execute
-        let cpu = &mut creature.core;
-        self.execute(cpu, ins);
-        println!("Execute: {}", cpu);
+        self.execute(creature, ins);
+        println!("Execute: {}", creature.core);
 
+        let cpu = &mut creature.core;
         cpu.ip += 1;
         if (cpu.ip as usize) == creature.genome_region.size {
             cpu.ip = 0;
@@ -384,6 +398,7 @@ impl Universe {
                 self.one_instruction_cycle(c);
             }
         }
+        cs.append(&mut self.creatures);
         self.creatures = cs;
     }
 }
@@ -393,30 +408,89 @@ fn main() {
 
     let mut univ = Universe::new();
     let insts = [
-        Jmp,
         Nop1,
         Nop1,
         Nop1,
         Nop1,
         Zero,
         Or1,
-        Zero,
         Shl,
+        Shl,
+        MovCd,
+        Adrb,
+        Nop0,
+        Nop0,
+        Nop0,
+        Nop0,
+        SubAc,
+        MovAb,
+        Adrf,
+        Nop0,
+        Nop0,
+        Nop0,
+        Nop1,
         IncA,
+        SubAb,
+        Nop1,
+        Nop1,
+        Nop0,
+        Nop1,
+        Mal,
+        Call,
         Nop0,
         Nop0,
+        Nop1,
+        Nop1,
+        Divide,
+        Jmp,
         Nop0,
         Nop0,
+        Nop1,
+        Nop0,
+        IfCz,
+        Nop1,
+        Nop1,
+        Nop0,
+        Nop0,
+        PushAx,
+        PushBx,
+        PushCx,
+        Nop1,
+        Nop0,
+        Nop1,
+        Nop0,
+        MovIab,
+        DecC,
+        IfCz,
+        Jmp,
+        Nop0,
+        Nop1,
+        Nop0,
+        Nop0,
+        IncA,
         IncB,
-        Jmpb,
+        Jmp,
+        Nop0,
+        Nop1,
+        Nop0,
+        Nop1,
+        IfCz,
+        Nop1,
+        Nop0,
+        Nop1,
+        Nop1,
+        PopCx,
+        PopBx,
+        PopAx,
+        Ret,
         Nop1,
         Nop1,
         Nop1,
-        Nop1,
-        Zero,
-        ];
+        Nop0,
+        IfCz,
+    ];
     univ.generate_creature(&insts);
-    univ.execute_all_creatures(10);
+    univ.execute_all_creatures(1024);
 }
 
 
@@ -798,5 +872,30 @@ mod tests {
         c.core.ip += 3;
         c.core.ax = c.genome_region.addr as u16 + 12;
         assert_eq!(univ.creatures[0].core, c.core);
+    }
+
+    #[test]
+    fn test_instruction_mal_divide()
+    {
+        let insts = [
+            IncC,
+            IncC,
+            IncC,
+            Mal,
+            Divide,
+        ];
+        let (mut univ, mut c) = prepare_test_creature(&insts);
+
+        univ.execute_all_creatures(4);
+        c.core.ip += 4;
+        c.core.cx = 3;
+        c.core.ax = univ.creatures[0].daughter.as_ref().unwrap().genome_region.addr as u16;
+        assert_eq!(univ.creatures[0].core, c.core);
+
+        univ.execute_all_creatures(1);
+        c.core.ip -= 4;
+        assert_eq!(univ.creatures[0].core, c.core);
+        assert_eq!(univ.creatures[0].daughter.is_none(), true);
+        assert_eq!(univ.creatures[1].genome_region.addr, c.core.ax as usize);
     }
 }

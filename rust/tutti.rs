@@ -5,7 +5,7 @@ use std::ops::Range;
 
 type Register = u16;
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 struct Cpu {
     ax: Register,
     bx: Register,
@@ -50,9 +50,12 @@ impl Cpu {
 
     fn pop(&mut self) -> Register
     {
-        let v = self.stack[self.sp as usize];
+        if self.sp == 0 {
+            panic!("Stack is empty.");
+        }
+
         self.sp -= 1;
-        v
+        self.stack[self.sp as usize]
     }
 }
 
@@ -99,6 +102,7 @@ impl Instruction {
     }
 }
 
+#[derive(Clone)]
 struct MemoryRegion {
     addr: usize,
     size: usize,
@@ -124,17 +128,20 @@ impl MemoryRegion {
     }
 }
 
+#[derive(Clone)]
 struct Creature {
     core: Cpu,
-    genome: MemoryRegion,
+    genome_region: MemoryRegion,
 }
 
 impl Creature {
     fn new(g: MemoryRegion) -> Creature
     {
+        let mut core = Cpu::new();
+        core.ip = g.addr as u16;
         Creature {
-            core: Cpu::new(),
-            genome: g,
+            core: core,
+            genome_region: g,
         }
     }
 }
@@ -161,13 +168,13 @@ impl Universe {
         }
     }
 
-    fn generate_creature(&mut self, instrunctions: &[Instruction])
+    fn generate_creature(&mut self, instructions: &[Instruction])
     {
-        match self.allocate_genome_pool(instrunctions.len()) {
+        match self.allocate_genome_pool(instructions.len()) {
             None => panic!("no memory"),
             Some(genome_region) => {
                 let c = Creature::new(genome_region);
-                self.write_to_genome_pool(&c.genome, instrunctions);
+                self.write_instructions(c.genome_region.addr, instructions);
                 self.creatures.push_front(c);
             }
         }
@@ -196,17 +203,11 @@ impl Universe {
         // TODO
     }
 
-    fn read_from_genome_pool(&self, r: &MemoryRegion) -> &[Instruction]
+    fn write_instructions(&mut self, addr: usize, src: &[Instruction])
     {
-        &self.genome_soup[r.range()]
-    }
-
-    fn write_to_genome_pool(&mut self, r: &MemoryRegion, data: &[Instruction])
-    {
-        // TODO: check write privilege.
-        let slice = &mut self.genome_soup[r.range()];
-        for i in 0..data.len() {
-            slice[i] = data[i];
+        let dst = &mut self.genome_soup[addr..(addr + src.len())];
+        for (s, i) in dst.iter_mut().zip(src) {
+            *s = *i
         }
     }
 
@@ -225,28 +226,28 @@ impl Universe {
                             _    => panic!("invalid instrunction"),
                         }
                     })
-                    .collect::<Vec<Instruction>>()
+                .collect::<Vec<Instruction>>()
             })
-            .and_then(|complement_template| {
-                let len = complement_template.len();
-                let is_equal_pattern = |window| complement_template == window;
+        .and_then(|complement_template| {
+            let len = complement_template.len();
+            let is_equal_pattern = |window| complement_template == window;
 
-                match is_forward {
-                    true => {
-                        (&self.genome_soup[(addr + len)..self.genome_soup.len()])
-                            .windows(len)
-                            .position(is_equal_pattern)
-                            .map(|addr_diff| addr + len + addr_diff)
-                    },
-                    false => {
-                        (&self.genome_soup[0..addr])
-                            .windows(len)
-                            .rposition(is_equal_pattern)
-                            .map(|addr_diff| addr_diff)
-                    }
+            match is_forward {
+                true => {
+                    (&self.genome_soup[(addr + len)..self.genome_soup.len()])
+                        .windows(len)
+                        .position(is_equal_pattern)
+                        .map(|addr_diff| addr + len + addr_diff)
+                },
+                false => {
+                    (&self.genome_soup[0..addr])
+                        .windows(len)
+                        .rposition(is_equal_pattern)
+                        .map(|addr_diff| addr_diff)
                 }
-                .map(|complement_addr| (complement_addr, len))
-            })
+            }
+            .map(|complement_addr| (complement_addr, len))
+        })
     }
 
     fn search_complement_addr_forward(&self, addr: usize) -> Option<(usize, usize)>
@@ -305,20 +306,19 @@ impl Universe {
             Jmp | Jmpb | Call => {
                 if ins == Call {
                     let ip = cpu.ip;
-                    cpu.push(ip + 1);
+                    cpu.push(ip);
                 }
 
-                match self.search_complement_addr(cpu.ip as usize + 1, ins == Jmp) {
+                match self.search_complement_addr(cpu.ip as usize + 1, ins == Jmp || ins == Call) {
                     None               => {},
                     Some((addr, size)) => cpu.ip = (addr + size - 1) as u16,
                 }
             },
             Ret   => cpu.ip = cpu.pop(),
-            MovCd => cpu.dx = cpu.cx ,
-            MovAb => cpu.bx = cpu.ax,
+            MovCd => cpu.dx = cx,
+            MovAb => cpu.bx = ax,
             MovIab => {
-                let ins = self.read_from_genome_pool(&MemoryRegion::new(bx as usize, bx as usize+ 1))[0];
-                self.write_to_genome_pool(&MemoryRegion::new(ax as usize, ax as usize+ 1), &[ins]);
+                self.genome_soup[ax as usize] = self.genome_soup[bx as usize];
             },
             Adr => {
                 // TODO
@@ -339,8 +339,7 @@ impl Universe {
 
     fn fetch(&self, creature: &Creature) -> Instruction
     {
-        let ip = creature.core.ip as usize;
-        self.read_from_genome_pool(&MemoryRegion::new(ip, ip + 1))[0]
+        self.genome_soup[creature.core.ip as usize]
     }
 
     fn one_instruction_cycle(&mut self, creature: &mut Creature)
@@ -355,18 +354,16 @@ impl Universe {
         println!("Execute: {}", cpu);
 
         cpu.ip += 1;
-        if (cpu.ip as usize) == creature.genome.size {
+        if (cpu.ip as usize) == creature.genome_region.size {
             cpu.ip = 0;
         }
     }
 
-    fn works(&mut self)
+    fn execute_all_creatures(&mut self, sliced_time: usize)
     {
         let mut cs = mem::replace(&mut self.creatures, VecDeque::new());
         for c in cs.iter_mut() {
-            const SLICED_TIME: usize = 10;
-
-            for _ in 0..SLICED_TIME {
+            for _ in 0..sliced_time {
                 self.one_instruction_cycle(c);
             }
         }
@@ -402,19 +399,18 @@ fn main() {
         Zero,
         ];
     univ.generate_creature(&insts);
-    univ.works();
+    univ.execute_all_creatures(10);
 }
 
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use Instruction::*;
 
     #[test]
     fn test_extract_argument_template()
     {
-        use Instruction::*;
-
         let mut univ = Universe::new();
         let insts = [
             Jmp,
@@ -430,7 +426,7 @@ mod tests {
             Zero, // Dummy to terminal the template.
         ];
 
-        univ.write_to_genome_pool(&MemoryRegion::new(0, insts.len()), &insts);
+        univ.write_instructions(0, &insts);
         assert_eq!(univ.extract_argument_template(1), Some(vec![Nop0, Nop1].as_slice()));
         assert_eq!(univ.extract_argument_template(4), Some(vec![Nop0].as_slice()));
         assert_eq!(univ.extract_argument_template(6), Some(vec![Nop1, Nop1, Nop1, Nop1].as_slice()));
@@ -439,8 +435,6 @@ mod tests {
     #[test]
     fn test_search_complement_addr()
     {
-        use Instruction::*;
-
         let mut univ = Universe::new();
         let insts = [
             Jmp,
@@ -452,7 +446,7 @@ mod tests {
             Zero, // Dummy to terminal the template.
         ];
 
-        univ.write_to_genome_pool(&MemoryRegion::new(0, insts.len()), &insts);
+        univ.write_instructions(0, &insts);
         assert_eq!(univ.search_complement_addr_forward(1), Some((4, 2)));
         assert_eq!(univ.search_complement_addr_forward(4), None);
         assert_eq!(univ.search_complement_addr_backward(4), Some((1, 2)));
@@ -479,12 +473,281 @@ mod tests {
             Nop1,
             Nop1,
             Zero, // Dummy to terminal the template.
-        ];
-        univ.write_to_genome_pool(&MemoryRegion::new(10, 10 + insts.len()), &insts);
+            ];
+        univ.write_instructions(10, &insts);
         assert_eq!(univ.search_complement_addr_forward(10 + 1), Some((10 + 4, 2)));
         assert_eq!(univ.search_complement_addr_forward(10 + 7), Some((10 + 15, 4)));
         assert_eq!(univ.search_complement_addr_backward(10 + 4), Some((11, 2)));
         assert_eq!(univ.search_complement_addr_backward(10 + 7), None);
         assert_eq!(univ.search_complement_addr_backward(10 + 15), Some((17, 4)));
+    }
+
+    fn prepare_test_creature(insts: &[Instruction]) -> (Universe, Creature)
+    {
+        let mut univ = Universe::new();
+
+        univ.generate_creature(&insts);
+        let c = univ.creatures[0].clone();
+
+        (univ, c)
+    }
+
+    #[test]
+    fn test_instruction_nop()
+    {
+        let insts = [ Nop0, Nop1, Nop0, Nop1 ];
+        let (mut univ, mut c) = prepare_test_creature(&insts);
+
+        univ.execute_all_creatures(4);
+        assert_eq!(univ.creatures[0].core, c.core);
+
+        univ.execute_all_creatures(4);
+        assert_eq!(univ.creatures[0].core, c.core);
+    }
+
+    #[test]
+    fn test_instruction_or1()
+    {
+        let insts = [ Or1 ];
+        let (mut univ, mut c) = prepare_test_creature(&insts);
+
+        univ.execute_all_creatures(1);
+        c.core.cx = 1;
+        assert_eq!(univ.creatures[0].core, c.core);
+
+        univ.execute_all_creatures(1);
+        c.core.cx = 0;
+        assert_eq!(univ.creatures[0].core, c.core);
+    }
+
+    #[test]
+    fn test_instruction_shl()
+    {
+        let insts = [ Or1, Shl ];
+        let (mut univ, mut c) = prepare_test_creature(&insts);
+
+        univ.execute_all_creatures(2);
+        c.core.cx = 2;
+        assert_eq!(univ.creatures[0].core, c.core);
+
+        univ.execute_all_creatures(2);
+        c.core.cx = 3 << 1;
+        assert_eq!(univ.creatures[0].core, c.core);
+    }
+
+    #[test]
+    fn test_instruction_zero()
+    {
+        let insts = [ Or1, Shl, Zero ];
+        let (mut univ, mut c) = prepare_test_creature(&insts);
+
+        univ.execute_all_creatures(2);
+        c.core.ip += 2;
+        c.core.cx = 2;
+        assert_eq!(univ.creatures[0].core, c.core);
+
+        univ.execute_all_creatures(1);
+        c.core.ip = c.genome_region.addr as u16;
+        c.core.cx = 0;
+        assert_eq!(univ.creatures[0].core, c.core);
+    }
+
+    #[test]
+    fn test_instruction_if_cz()
+    {
+        let insts = [ IfCz, Or1, Nop0 ];
+        let (mut univ, mut c) = prepare_test_creature(&insts);
+
+        univ.execute_all_creatures(1);
+        c.core.ip += 1;
+        assert_eq!(univ.creatures[0].core, c.core);
+
+        univ.execute_all_creatures(1);
+        c.core.ip += 1;
+        c.core.cx = 1;
+        assert_eq!(univ.creatures[0].core, c.core);
+
+        univ.execute_all_creatures(1);
+        c.core.ip = c.genome_region.addr as u16;
+        c.core.cx = 1;
+        assert_eq!(univ.creatures[0].core, c.core);
+
+        univ.execute_all_creatures(1);
+        c.core.ip += 2;
+        c.core.cx = 1;
+        assert_eq!(univ.creatures[0].core, c.core);
+    }
+
+    #[test]
+    fn test_instruction_sub()
+    {
+        let insts = [ IncA, IncA, IncB, SubAb, SubAc];
+        let (mut univ, mut c) = prepare_test_creature(&insts);
+
+        univ.execute_all_creatures(4);
+        c.core.ip += 4;
+        c.core.ax = 2;
+        c.core.bx = 1;
+        c.core.cx = 1;
+        assert_eq!(univ.creatures[0].core, c.core);
+
+        univ.execute_all_creatures(1);
+        c.core.ip = c.genome_region.addr as u16;
+        c.core.ax = 1;
+        assert_eq!(univ.creatures[0].core, c.core);
+    }
+
+    #[test]
+    fn test_instruction_inc_dec()
+    {
+        let insts = [ IncA, IncB, IncA, IncB, IncC, IncC, IncC, DecC];
+        let (mut univ, mut c) = prepare_test_creature(&insts);
+
+        univ.execute_all_creatures(8);
+        c.core.ax = 2;
+        c.core.bx = 2;
+        c.core.cx = 2;
+        assert_eq!(univ.creatures[0].core, c.core);
+    }
+
+    #[test]
+    fn test_instruction_push()
+    {
+        let insts = [IncA, IncB, IncC, PushAx, PushBx, PushCx, PushDx];
+        let (mut univ, mut c) = prepare_test_creature(&insts);
+
+        univ.execute_all_creatures(insts.len());
+        c.core.ax       = 1;
+        c.core.bx       = 1;
+        c.core.cx       = 1;
+        c.core.stack[0] = 1;
+        c.core.stack[1] = 1;
+        c.core.stack[2] = 1;
+        c.core.stack[3] = 0;
+        c.core.sp       = 4;
+        assert_eq!(univ.creatures[0].core, c.core);
+    }
+
+    #[test]
+    fn test_instruction_pop()
+    {
+        let insts = [IncA, IncB, IncC, PushAx, PushBx, PushCx, PushDx, PopAx, PopBx, PopCx, PopDx];
+        let (mut univ, mut c) = prepare_test_creature(&insts);
+
+        univ.execute_all_creatures(insts.len());
+        c.core.stack[0] = 1;
+        c.core.stack[1] = 1;
+        c.core.stack[2] = 1;
+        c.core.stack[3] = 0;
+        c.core.sp = 0;
+        c.core.ax = 0;
+        c.core.bx = 1;
+        c.core.cx = 1;
+        c.core.dx = 1;
+        assert_eq!(univ.creatures[0].core, c.core);
+    }
+
+    #[test]
+    fn test_instruction_jmp()
+    {
+        let insts = [
+            Nop1,
+            Nop0,
+            Nop1,
+            Jmp,
+            Nop0,
+            Zero,
+            Zero,
+            Zero,
+            Nop1,
+            Jmp,
+            Nop0,
+            Nop1,
+            Zero,
+            Nop1,
+            Nop0,
+            Jmpb,
+            Nop0,
+            Nop1,
+            Nop0,
+            Zero,
+        ];
+        let (mut univ, mut c) = prepare_test_creature(&insts);
+
+        univ.execute_all_creatures(4);
+        c.core.ip += 9;
+        assert_eq!(univ.creatures[0].core, c.core);
+
+        univ.execute_all_creatures(1);
+        c.core.ip += 6;
+        assert_eq!(univ.creatures[0].core, c.core);
+
+        univ.execute_all_creatures(1);
+        c.core.ip = c.genome_region.addr as u16 + 3;
+        assert_eq!(univ.creatures[0].core, c.core);
+    }
+
+    #[test]
+    fn test_instruction_call_ret()
+    {
+        let insts = [
+            Zero,
+            Call,
+            Nop1,
+            Nop0,
+            Nop1,
+            Jmp,
+            Nop0,
+            Nop1,
+            Nop0,
+            Ret,
+            Zero,
+        ];
+        let (mut univ, mut c) = prepare_test_creature(&insts);
+
+        univ.execute_all_creatures(2);
+        c.core.stack[0] = 1;
+        c.core.sp += 1;
+        c.core.ip += 9;
+        assert_eq!(univ.creatures[0].core, c.core);
+
+        univ.execute_all_creatures(1);
+        c.core.sp -= 1;
+        c.core.ip = c.genome_region.addr as u16 + 2;
+        assert_eq!(univ.creatures[0].core, c.core);
+    }
+
+    #[test]
+    fn test_instruction_mov()
+    {
+        let insts = [
+            IncC,
+            MovCd,
+            IncA,
+            MovAb,
+            IncA,
+            MovIab,
+        ];
+        let (mut univ, mut c) = prepare_test_creature(&insts);
+
+        univ.execute_all_creatures(2);
+        c.core.ip += 2;
+        c.core.cx = 1;
+        c.core.dx = 1;
+        assert_eq!(univ.creatures[0].core, c.core);
+
+        univ.execute_all_creatures(2);
+        c.core.ip += 2;
+        c.core.ax = 1;
+        c.core.bx = 1;
+        assert_eq!(univ.creatures[0].core, c.core);
+
+        univ.execute_all_creatures(1);
+        c.core.ip += 1;
+        c.core.ax = 2;
+        assert_eq!(univ.creatures[0].core, c.core);
+
+        univ.execute_all_creatures(1);
+        assert_eq!(univ.genome_soup[c.core.ax as usize], univ.genome_soup[c.core.bx as usize]);
     }
 }

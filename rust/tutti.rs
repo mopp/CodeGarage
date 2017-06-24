@@ -385,7 +385,7 @@ impl Universe {
 
         let cpu = &mut creature.core;
         cpu.ip += 1;
-        if (cpu.ip as usize) == creature.genome_region.size {
+        if (cpu.ip as usize) == creature.genome_region.end_addr() {
             cpu.ip = 0;
         }
     }
@@ -442,7 +442,7 @@ fn main() {
         Nop1,
         Nop1,
         Divide,
-        Jmp,
+        Jmpb,
         Nop0,
         Nop0,
         Nop1,
@@ -490,7 +490,10 @@ fn main() {
         IfCz,
     ];
     univ.generate_creature(&insts);
-    univ.execute_all_creatures(1024);
+    loop {
+        univ.execute_all_creatures(80);
+        println!("univ.creatures.len() = {}", univ.creatures.len());
+    }
 }
 
 

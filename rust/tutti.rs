@@ -292,12 +292,12 @@ impl Universe {
                     cpu.ip += 1;
                 }
             },
-            SubAb  => cpu.cx = ax - bx,
-            SubAc  => cpu.ax = ax - cx,
-            IncA   => cpu.ax = ax + 1,
-            IncB   => cpu.bx = bx + 1,
-            DecC   => cpu.cx = cx - 1,
-            IncC   => cpu.cx = cx + 1,
+            SubAb  => cpu.cx = ax.overflowing_sub(bx).0,
+            SubAc  => cpu.ax = ax.overflowing_sub(cx).0,
+            IncA   => cpu.ax = ax.overflowing_add(1).0,
+            IncB   => cpu.bx = bx.overflowing_add(1).0,
+            DecC   => cpu.cx = cx.overflowing_sub(1).0,
+            IncC   => cpu.cx = cx.overflowing_add(1).0,
             PushAx => cpu.push(ax),
             PushBx => cpu.push(bx),
             PushCx => cpu.push(cx),

@@ -321,12 +321,29 @@ impl Universe {
                 self.genome_soup[ax as usize] = self.genome_soup[bx as usize];
             },
             Adr => {
-                // TODO
+                let ip = cpu.ip as usize + 1;
+                let f = self.search_complement_addr_forward(ip);
+                let b = self.search_complement_addr_backward(ip);
+                match (f, b) {
+                    (None, None)                           => {},
+                    (None, Some((addr, _)))                => cpu.ax = addr as u16,
+                    (Some((addr, _)), None)                => cpu.ax = addr as u16,
+                    (Some((addr_f, _)), Some((addr_b, _))) => {
+                        // Find the nearest one.
+                        cpu.ax =
+                            if (addr_f - ip) < (ip - addr_b) {
+                                addr_f as u16
+                            } else {
+                                addr_b as u16
+                            };
+                    },
+                }
             },
-            Adrf => {
-                // TODO
-            },
-            Adrb => {
+            Adrf | Adrb => {
+                match self.search_complement_addr(cpu.ip as usize + 1, ins == Adrf) {
+                    None            => {},
+                    Some((addr, _)) => cpu.ax = addr as u16,
+                }
             },
             Mal => {
                 // TODO
@@ -496,7 +513,7 @@ mod tests {
     fn test_instruction_nop()
     {
         let insts = [ Nop0, Nop1, Nop0, Nop1 ];
-        let (mut univ, mut c) = prepare_test_creature(&insts);
+        let (mut univ, c) = prepare_test_creature(&insts);
 
         univ.execute_all_creatures(4);
         assert_eq!(univ.creatures[0].core, c.core);
@@ -671,7 +688,7 @@ mod tests {
             Nop1,
             Nop0,
             Zero,
-        ];
+            ];
         let (mut univ, mut c) = prepare_test_creature(&insts);
 
         univ.execute_all_creatures(4);
@@ -749,5 +766,37 @@ mod tests {
 
         univ.execute_all_creatures(1);
         assert_eq!(univ.genome_soup[c.core.ax as usize], univ.genome_soup[c.core.bx as usize]);
+    }
+
+    #[test]
+    fn test_instruction_adr()
+    {
+        let insts = [
+            Nop0,
+            Nop1,
+            Adrb,
+            Nop1,
+            Nop0,
+            Adrf,
+            Nop1,
+            Zero,
+            Zero,
+            Zero,
+            Zero,
+            Zero,
+            Nop0,
+            Zero,
+        ];
+        let (mut univ, mut c) = prepare_test_creature(&insts);
+
+        univ.execute_all_creatures(3);
+        c.core.ip += 3;
+        c.core.ax = c.genome_region.addr as u16 + 0;
+        assert_eq!(univ.creatures[0].core, c.core);
+
+        univ.execute_all_creatures(3);
+        c.core.ip += 3;
+        c.core.ax = c.genome_region.addr as u16 + 12;
+        assert_eq!(univ.creatures[0].core, c.core);
     }
 }

@@ -19,8 +19,8 @@ struct Cpu {
 
 impl fmt::Display for Cpu {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let s1 = format!("ax = 0x{:02X}, bx = 0x{:02X}, cx = 0x{:02X}, dx = 0x{:02X}, ", self.ax, self.bx, self.cx, self.dx);
-        let s2 = format!("ip = 0x{:02X}, sp = 0x{:02X}, ", self.ip, self.sp);
+        let s1 = format!("ax = 0x{:04X}, bx = 0x{:04X}, cx = 0x{:04X}, dx = 0x{:04X}, ", self.ax, self.bx, self.cx, self.dx);
+        let s2 = format!("ip = 0x{:04X}, sp = 0x{:04X}, ", self.ip, self.sp);
         let s3 = format!("flags = 0x{:02X}", self.flags);
 
         write!(f, "{}{}{}", s1, s2, s3)
@@ -329,23 +329,23 @@ impl Universe {
                 let b = self.search_complement_addr_backward(ip);
                 match (f, b) {
                     (None, None)                           => {},
-                    (None, Some((addr, _)))                => cpu.ax = addr as u16,
-                    (Some((addr, _)), None)                => cpu.ax = addr as u16,
-                    (Some((addr_f, _)), Some((addr_b, _))) => {
+                    (None, Some((addr, size)))                => cpu.ax = (addr + size) as u16,
+                    (Some((addr, size)), None)                => cpu.ax = (addr + size) as u16,
+                    (Some((addr_f, size_f)), Some((addr_b, size_b))) => {
                         // Find the nearest one.
                         cpu.ax =
                             if (addr_f - ip) < (ip - addr_b) {
-                                addr_f as u16
+                                (addr_f + size_f) as u16
                             } else {
-                                addr_b as u16
+                                (addr_b + size_b) as u16
                             };
                     },
                 }
             },
             Adrf | Adrb => {
                 match self.search_complement_addr(cpu.ip as usize + 1, ins == Adrf) {
-                    None            => {},
-                    Some((addr, _)) => cpu.ax = addr as u16,
+                    None               => {},
+                    Some((addr, size)) => cpu.ax = (addr + size) as u16,
                 }
             },
             Mal => {
@@ -865,7 +865,7 @@ mod tests {
 
         univ.execute_all_creatures(3);
         c.core.ip += 3;
-        c.core.ax = c.genome_region.addr as u16 + 0;
+        c.core.ax = c.genome_region.addr as u16 + 2;
         assert_eq!(univ.creatures[0].core, c.core);
 
         univ.execute_all_creatures(3);

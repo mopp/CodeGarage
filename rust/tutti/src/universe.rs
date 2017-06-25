@@ -1,6 +1,7 @@
 extern crate rand;
 
 use creature::Creature;
+use gene_bank::GeneBank;
 use instruction::Instruction;
 use memory_region::MemoryRegion;
 use rand::Rng;
@@ -17,6 +18,7 @@ pub struct Universe {
     world_clock: usize,
     is_enable_random_mutate: bool,
     mutate_threshold_cosmic_rays: usize,
+    gene_bank: GeneBank,
 }
 
 
@@ -34,12 +36,31 @@ impl Universe {
             world_clock: 0,
             is_enable_random_mutate: false,
             mutate_threshold_cosmic_rays: 2500,
+            gene_bank: GeneBank::new(),
         }
+    }
+
+    pub fn randomize_mutate_thresholds(&mut self)
+    {
+        if self.is_enable_random_mutate == false {
+            return;
+        }
+
+
+        for c in self.creatures.iter_mut() {
+            c.randomize_mutate_threshold_copy_fail();
+        }
+        self.randomize_mutate_threshold_cosmic_rays();
+    }
+
+    fn randomize_mutate_threshold_cosmic_rays(&mut self)
+    {
+        self.mutate_threshold_cosmic_rays = rand::thread_rng().gen_range(10000, 20000);
     }
 
     pub fn enable_random_mutate(&mut self)
     {
-        self.is_enable_random_mutate = false;
+        self.is_enable_random_mutate = true;
     }
 
     pub fn generate_creature(&mut self, instructions: &[Instruction])
@@ -50,6 +71,10 @@ impl Universe {
                 let c = Creature::new(genome_region);
                 self.write_instructions(c.genome_region.addr, instructions);
                 self.creatures.push_front(c);
+
+                let v = instructions.to_vec();
+                self.gene_bank.register_genome(&v, None);
+                self.gene_bank.count_up_alive_genome(&v);
             }
         }
     }
@@ -168,7 +193,7 @@ impl Universe {
     fn execute(&mut self, creature: &mut Creature, ins: Instruction)
     {
         use Instruction::*;
-        let cpu = &mut creature.core;
+        let mut cpu = creature.core.clone();
         let (ax, bx, cx, dx) = (cpu.ax, cpu.bx, cpu.cx, cpu.dx);
         match ins {
             Nop0   => {},
@@ -211,16 +236,26 @@ impl Universe {
             MovCd => cpu.dx = cx,
             MovAb => cpu.bx = ax,
             MovIab => {
-                creature.count_copy += 1;
+                let is_writable = |x, r: &MemoryRegion| (r.addr <= x) && (x < r.end_addr());
+                let ax = ax as usize;
 
-                let ins = self.genome_soup[bx as usize];
-                self.genome_soup[ax as usize] =
-                    if self.is_enable_random_mutate && ((creature.count_copy % creature.mutate_threshold_copy_fail) == 0) {
-                        creature.mutate_threshold_copy_fail = rand::thread_rng().gen_range(1000, 2500);
-                        ins
-                    } else {
-                        ins
-                    }
+                let mut is_writable_memory = is_writable(ax, &creature.genome_region);
+                if (is_writable_memory == false) && creature.daughter.is_some() {
+                    let d = creature.daughter.as_ref().unwrap();
+                    is_writable_memory = is_writable(ax, &d.genome_region);
+                }
+
+                if is_writable_memory {
+                    creature.count_copy += 1;
+                    let ins = self.genome_soup[bx as usize];
+                    self.genome_soup[ax as usize] =
+                        if self.is_enable_random_mutate && ((creature.count_copy % creature.mutate_threshold_copy_fail) == 0) {
+                            creature.randomize_mutate_threshold_copy_fail();
+                            ins.mutate_bit_randomly()
+                        } else {
+                            ins
+                        }
+                }
             },
             Adr => {
                 let ip = cpu.ip as usize + 1;
@@ -261,10 +296,21 @@ impl Universe {
                     let daughter = creature.daughter.clone();
                     creature.daughter = None;
 
-                    self.creatures.push_back(*daughter.unwrap());
+                    let mut daughter        = *daughter.unwrap();
+                    let daughter_genome = self.genome_soup[daughter.genome_region.range()].to_vec();
+                    let mother_genome   = self.genome_soup[creature.genome_region.range()].to_vec();
+                    self.gene_bank.register_genome(&daughter_genome, Some(mother_genome));
+                    self.gene_bank.count_up_alive_genome(&daughter_genome);
+
+                    if self.is_enable_random_mutate {
+                        daughter.randomize_mutate_threshold_copy_fail();
+                    }
+                    self.creatures.push_back(daughter);
                 }
             }
         }
+
+        creature.core = cpu;
     }
 
     fn fetch(&self, creature: &Creature) -> Instruction
@@ -299,12 +345,10 @@ impl Universe {
             self.world_clock += 1;
 
             if self.is_enable_random_mutate && ((self.world_clock % self.mutate_threshold_cosmic_rays) == 0) {
-                let mut rng = rand::thread_rng();
-
-                let target_index = rng.gen_range(0, self.genome_soup.len());
+                let target_index = rand::thread_rng().gen_range(0, self.genome_soup.len());
                 self.genome_soup[target_index] = self.genome_soup[target_index].mutate_bit_randomly();
 
-                self.mutate_threshold_cosmic_rays = rng.gen_range(10000, 20000);
+                self.randomize_mutate_threshold_cosmic_rays();
             }
         }
     }
@@ -333,7 +377,11 @@ impl Universe {
         while threshold < self.compute_genome_soup_used_rate() {
             match self.creatures.pop_back() {
                 None         => panic!("!?"),
-                Some(target) => self.free_genome_soup(target.genome_region),
+                Some(target) => {
+                    let v = self.genome_soup[target.genome_region.range()].to_vec();
+                    self.gene_bank.count_up_dead_genome(&v);
+                    self.free_genome_soup(target.genome_region);
+                },
             }
         }
     }
@@ -341,6 +389,11 @@ impl Universe {
     pub fn count_creatures(&self) -> usize
     {
         self.creatures.len()
+    }
+
+    pub fn gene_bank(&self) -> &GeneBank
+    {
+        &self.gene_bank
     }
 }
 

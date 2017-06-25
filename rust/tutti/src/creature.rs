@@ -1,5 +1,8 @@
+extern crate rand;
+
 use cpu::Cpu;
 use memory_region::MemoryRegion;
+use rand::Rng;
 
 #[derive(Clone)]
 pub struct Creature {
@@ -23,6 +26,11 @@ impl Creature {
             mutate_threshold_copy_fail: 0,
             count_copy: 0,
         }
+    }
+
+    pub fn randomize_mutate_threshold_copy_fail(&mut self)
+    {
+        self.mutate_threshold_copy_fail = rand::thread_rng().gen_range(1000, 2500);
     }
 }
 

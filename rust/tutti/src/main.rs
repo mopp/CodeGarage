@@ -1,3 +1,6 @@
+extern crate rand;
+
+use rand::Rng;
 use std::collections::VecDeque;
 use std::fmt;
 use std::mem;
@@ -100,6 +103,52 @@ impl Instruction {
     {
         (x == Instruction::Nop0) || (x == Instruction::Nop1)
     }
+
+    fn from_usize(x: usize) -> Instruction
+    {
+        use Instruction::*;
+        match x {
+            0x00 => Nop0,
+            0x01 => Nop1,
+            0x02 => Or1,
+            0x03 => Shl,
+            0x04 => Zero,
+            0x05 => IfCz,
+            0x06 => SubAb,
+            0x07 => SubAc,
+            0x08 => IncA,
+            0x09 => IncB,
+            0x0A => DecC,
+            0x0B => IncC,
+            0x0C => PushAx,
+            0x0D => PushBx,
+            0x0E => PushCx,
+            0x0F => PushDx,
+            0x10 => PopAx,
+            0x11 => PopBx,
+            0x12 => PopCx,
+            0x13 => PopDx,
+            0x14 => Jmp,
+            0x15 => Jmpb,
+            0x16 => Call,
+            0x17 => Ret,
+            0x18 => MovCd,
+            0x19 => MovAb,
+            0x1A => MovIab,
+            0x1B => Adr,
+            0x1C => Adrb,
+            0x1D => Adrf,
+            0x1E => Mal,
+            0x1F => Divide,
+            _    => panic!("it does not match any instruction.")
+        }
+    }
+
+    fn mutate_bit_randomly(&self) -> Instruction
+    {
+        let target_bit = rand::thread_rng().gen_range(0, 5);
+        Instruction::from_usize((*self as usize) ^ (1 << target_bit))
+    }
 }
 
 #[derive(Clone)]
@@ -133,6 +182,8 @@ struct Creature {
     core: Cpu,
     genome_region: MemoryRegion,
     daughter: Option<Box<Creature>>,
+    mutate_threshold_copy_fail: usize,
+    count_copy: usize,
 }
 
 impl Creature {
@@ -144,6 +195,8 @@ impl Creature {
             core: core,
             genome_region: g,
             daughter: None,
+            mutate_threshold_copy_fail: 0,
+            count_copy: 0,
         }
     }
 }
@@ -155,6 +208,8 @@ struct Universe {
     free_regions: VecDeque<MemoryRegion>,
     creatures: VecDeque<Creature>,
     world_clock: usize,
+    is_enable_random_mutate: bool,
+    mutate_threshold_cosmic_rays: usize,
 }
 
 impl Universe {
@@ -169,7 +224,14 @@ impl Universe {
             free_regions: free_regions,
             creatures: VecDeque::new(),
             world_clock: 0,
+            is_enable_random_mutate: false,
+            mutate_threshold_cosmic_rays: 2500,
         }
+    }
+
+    fn enable_random_mutate(&mut self)
+    {
+        self.is_enable_random_mutate = false;
     }
 
     fn generate_creature(&mut self, instructions: &[Instruction])
@@ -245,7 +307,7 @@ impl Universe {
                         match x {
                             Nop0 => Nop1,
                             Nop1 => Nop0,
-                            _    => panic!("invalid instrunction"),
+                            _    => panic!("invalid instruction"),
                         }
                     })
                 .collect::<Vec<Instruction>>()
@@ -341,7 +403,16 @@ impl Universe {
             MovCd => cpu.dx = cx,
             MovAb => cpu.bx = ax,
             MovIab => {
-                self.genome_soup[ax as usize] = self.genome_soup[bx as usize];
+                creature.count_copy += 1;
+
+                let ins = self.genome_soup[bx as usize];
+                self.genome_soup[ax as usize] =
+                    if self.is_enable_random_mutate && ((creature.count_copy % creature.mutate_threshold_copy_fail) == 0) {
+                        creature.mutate_threshold_copy_fail = rand::thread_rng().gen_range(1000, 2500);
+                        ins
+                    } else {
+                        ins
+                    }
             },
             Adr => {
                 let ip = cpu.ip as usize + 1;
@@ -419,7 +490,13 @@ impl Universe {
 
             self.world_clock += 1;
 
-            if self.world_clock == 1_0000 {
+            if self.is_enable_random_mutate && ((self.world_clock % self.mutate_threshold_cosmic_rays) == 0) {
+                let mut rng = rand::thread_rng();
+
+                let target_index = rng.gen_range(0, self.genome_soup.len());
+                self.genome_soup[target_index] = self.genome_soup[target_index].mutate_bit_randomly();
+
+                self.mutate_threshold_cosmic_rays = rng.gen_range(10000, 20000);
             }
         }
     }
@@ -458,6 +535,8 @@ fn main() {
     use Instruction::*;
 
     let mut univ = Universe::new();
+    univ.enable_random_mutate();
+
     let insts = [
         Nop1,
         Nop1,

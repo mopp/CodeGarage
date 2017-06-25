@@ -154,6 +154,7 @@ struct Universe {
     genome_soup: [Instruction; UNIVERSE_TOTAL_GENOME_CAPACITY],
     free_regions: VecDeque<MemoryRegion>,
     creatures: VecDeque<Creature>,
+    world_clock: usize,
 }
 
 impl Universe {
@@ -167,6 +168,7 @@ impl Universe {
             genome_soup: soup,
             free_regions: free_regions,
             creatures: VecDeque::new(),
+            world_clock: 0,
         }
     }
 
@@ -391,20 +393,34 @@ impl Universe {
         self.genome_soup[creature.core.ip as usize]
     }
 
-    fn one_instruction_cycle(&mut self, creature: &mut Creature)
+    fn increment_ip(&self, creature: &mut Creature)
     {
-        // Fetch
-        let ins = self.fetch(creature);
-        // println!("Fetch: {:?}", ins);
-
-        // Execute
-        self.execute(creature, ins);
-        // println!("Execute: {}", creature.core);
-
         let cpu = &mut creature.core;
         cpu.ip += 1;
         if (cpu.ip as usize) == creature.genome_region.end_addr() {
             cpu.ip = 0;
+        }
+    }
+
+    fn one_instruction_cycle(&mut self, creature: &mut Creature)
+    {
+        let ins = self.fetch(creature);
+        self.execute(creature, ins);
+        self.increment_ip(creature);
+
+        // println!("Fetch: {:?}", ins);
+        // println!("Execute: {}", creature.core);
+    }
+
+    fn execute_creature(&mut self, creature: &mut Creature, insts_count: usize)
+    {
+        for _ in 0..insts_count {
+            self.one_instruction_cycle(creature);
+
+            self.world_clock += 1;
+
+            if self.world_clock == 1_0000 {
+            }
         }
     }
 
@@ -414,9 +430,7 @@ impl Universe {
         for c in cs.iter_mut() {
             let size = c.genome_region.size as f64;
             let time_slice = size.powf(power).floor() as usize;
-            for _ in 0..time_slice {
-                self.one_instruction_cycle(c);
-            }
+            self.execute_creature(c, time_slice);
         }
         cs.append(&mut self.creatures);
         self.creatures = cs;
@@ -518,7 +532,7 @@ fn main() {
         Nop1,
         Nop0,
         IfCz,
-    ];
+        ];
     univ.generate_creature(&insts);
 
     loop {

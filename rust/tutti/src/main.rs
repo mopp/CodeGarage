@@ -9,6 +9,7 @@ mod gene_bank;
 
 use instruction::Instruction;
 use universe::Universe;
+use memory_region::MemoryRegion;
 
 
 fn main() {
@@ -103,13 +104,20 @@ fn main() {
     univ.randomize_mutate_thresholds();
     loop {
         univ.execute_all_creatures(1.2);
-        univ.wakeup_reaper_if_genome_usage_over(0.8);
         println!("==========");
-        println!("# of creatures: {}", univ.count_creatures());
         println!("Genome usage rate: {}", univ.compute_genome_soup_used_rate());
+        println!("Genome free rate:  {}", univ.compute_genome_soup_free_rate());
+
+        univ.wakeup_reaper_if_genome_usage_over(0.8);
+
+        println!("# of creatures: {}", univ.count_creatures());
         println!("Bank Info\n{}", univ.gene_bank());
         println!("# of free regions {:?}", univ.free_regions.len());
-        // println!("{:?}", univ.free_regions);
+        println!("creatures {:?}", univ.creatures.iter().map(|x| x.genome_region).collect::<Vec<MemoryRegion>>());
+        println!("{:?}", univ.free_regions);
         println!("==========");
+        if univ.count_creatures() == 0 {
+            break;
+        }
     }
 }

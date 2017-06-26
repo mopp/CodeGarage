@@ -9,12 +9,12 @@ use std::collections::VecDeque;
 use std::mem;
 
 
-const UNIVERSE_TOTAL_GENOME_CAPACITY: usize = 8 * 1024;
+const UNIVERSE_TOTAL_GENOME_CAPACITY: usize = 80 * 7;
 
 pub struct Universe {
     genome_soup: [Instruction; UNIVERSE_TOTAL_GENOME_CAPACITY],
     pub free_regions: Vec<MemoryRegion>,
-    creatures: VecDeque<Creature>,
+    pub creatures: VecDeque<Creature>,
     world_clock: usize,
     is_enable_random_mutate: bool,
     mutate_threshold_cosmic_rays: usize,
@@ -110,7 +110,7 @@ impl Universe {
     fn free_genome_soup(&mut self, r: MemoryRegion)
     {
         debug_assert!(r.size != 0);
-        println!("ADD = {:?}", r);
+        println!("ADD     = {:?}", r);
         println!("CURRENT = {:?}", self.free_regions);
 
         for v in self.free_regions.iter_mut() {
@@ -126,6 +126,7 @@ impl Universe {
 
         self.free_regions.push(r);
         self.free_regions.sort();
+        println!("PUSHED  = {:?}", self.free_regions);
     }
 
     pub fn compute_genome_soup_free_rate(&self) -> f64
@@ -200,6 +201,9 @@ impl Universe {
     {
         // the addr have to be the beginning of the template you want to extract.
         debug_assert_eq!(Instruction::is_nop(self.genome_soup[addr]), true);
+        if Instruction::is_nop(self.genome_soup[addr]) == false {
+            return None;
+        }
 
         let target_region = &self.genome_soup[addr..(self.genome_soup.len() - 1)];
         target_region

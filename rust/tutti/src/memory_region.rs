@@ -1,6 +1,7 @@
 use std::ops::Range;
+use std::cmp::Ordering;
 
-#[derive(Clone)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub struct MemoryRegion {
     pub addr: usize,
     pub size: usize,
@@ -24,5 +25,21 @@ impl MemoryRegion {
     pub fn range(&self) -> Range<usize>
     {
         self.addr..self.end_addr()
+    }
+}
+
+
+impl Ord for MemoryRegion {
+    fn cmp(&self, other: &MemoryRegion) -> Ordering
+    {
+        other.addr.cmp(&self.addr)
+    }
+}
+
+
+impl PartialOrd for MemoryRegion {
+    fn partial_cmp(&self, other: &MemoryRegion) -> Option<Ordering>
+    {
+        Some(self.cmp(other))
     }
 }

@@ -13,7 +13,7 @@ const UNIVERSE_TOTAL_GENOME_CAPACITY: usize = 8 * 1024;
 
 pub struct Universe {
     genome_soup: [Instruction; UNIVERSE_TOTAL_GENOME_CAPACITY],
-    free_regions: VecDeque<MemoryRegion>,
+    free_regions: Vec<MemoryRegion>,
     creatures: VecDeque<Creature>,
     world_clock: usize,
     is_enable_random_mutate: bool,
@@ -26,8 +26,8 @@ impl Universe {
     pub fn new() -> Universe
     {
         let soup = [Instruction::Nop0; UNIVERSE_TOTAL_GENOME_CAPACITY];
-        let mut free_regions = VecDeque::new();
-        free_regions.push_front(MemoryRegion::new(0, soup.len()));
+        let mut free_regions = Vec::new();
+        free_regions.push(MemoryRegion::new(0, soup.len()));
 
         Universe {
             genome_soup: soup,
@@ -81,32 +81,40 @@ impl Universe {
 
     fn allocate_genome_soup(&mut self, request_size: usize) -> Option<MemoryRegion>
     {
-        let mut allocated_genome = None;
+        debug_assert!(request_size != 0);
 
-        for v in self.free_regions.iter_mut() {
-            if request_size <= v.size {
+        let index = self.free_regions.iter().position(|x| request_size <= x.size);
+        match index {
+            None => None,
+            Some(index) => {
+                let v = self.free_regions.get_mut(index).unwrap();
+
                 let addr = v.addr;
                 v.addr += request_size;
                 v.size -= request_size;
 
-                allocated_genome = Some(MemoryRegion::new(addr, request_size));
-                break;
+                Some(MemoryRegion::new(addr, request_size))
             }
         }
-
-        allocated_genome
     }
 
     fn free_genome_soup(&mut self, r: MemoryRegion)
     {
+        debug_assert!(r.size != 0);
+
         for v in self.free_regions.iter_mut() {
             if v.end_addr() == r.addr {
+                v.size += r.size;
+                return;
+            } else if v.addr == r.end_addr() {
+                v.addr -= r.size;
                 v.size += r.size;
                 return;
             }
         }
 
-        self.free_regions.push_front(r);
+        self.free_regions.push(r);
+        self.free_regions.sort();
     }
 
     pub fn compute_genome_soup_free_rate(&self) -> f64

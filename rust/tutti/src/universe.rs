@@ -236,16 +236,24 @@ impl Universe {
             MovCd => cpu.dx = cx,
             MovAb => cpu.bx = ax,
             MovIab => {
-                let is_writable = |x, r: &MemoryRegion| (r.addr <= x) && (x < r.end_addr());
+                let is_writable = |x, r: &MemoryRegion| {
+                    (r.addr <= x) && (x < r.end_addr())
+                };
                 let ax = ax as usize;
 
-                let mut is_writable_memory = is_writable(ax, &creature.genome_region);
-                if (is_writable_memory == false) && creature.daughter.is_some() {
-                    let d = creature.daughter.as_ref().unwrap();
-                    is_writable_memory = is_writable(ax, &d.genome_region);
-                }
+                let is_write =
+                {
+                    let d = creature.daughter.as_ref();
+                    if d.is_some() && is_writable(ax, &d.unwrap().genome_region) {
+                        true
+                    } else if is_writable(ax, &creature.genome_region) {
+                        true
+                    } else {
+                        false
+                    }
+                };
 
-                if is_writable_memory {
+                if is_write {
                     creature.count_copy += 1;
                     let ins = self.genome_soup[bx as usize];
                     self.genome_soup[ax as usize] =
@@ -296,7 +304,7 @@ impl Universe {
                     let daughter = creature.daughter.clone();
                     creature.daughter = None;
 
-                    let mut daughter        = *daughter.unwrap();
+                    let mut daughter    = *daughter.unwrap();
                     let daughter_genome = self.genome_soup[daughter.genome_region.range()].to_vec();
                     let mother_genome   = self.genome_soup[creature.genome_region.range()].to_vec();
                     self.gene_bank.register_genome(&daughter_genome, Some(mother_genome));
@@ -346,7 +354,7 @@ impl Universe {
 
             if self.is_enable_random_mutate && ((self.world_clock % self.mutate_threshold_cosmic_rays) == 0) {
                 let target_index = rand::thread_rng().gen_range(0, self.genome_soup.len());
-                self.genome_soup[target_index] = self.genome_soup[target_index].mutate_bit_randomly();
+                // self.genome_soup[target_index] = self.genome_soup[target_index].mutate_bit_randomly();
 
                 self.randomize_mutate_threshold_cosmic_rays();
             }

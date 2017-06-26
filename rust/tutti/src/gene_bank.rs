@@ -1,6 +1,7 @@
 use instruction::Instruction;
 use std::collections::HashMap;
 use std::fmt;
+use std::collections::HashSet;
 
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -46,7 +47,16 @@ pub struct GeneBank {
 
 impl fmt::Display for GeneBank {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let s = self.records
+        let mut keys = HashSet::new();
+        for i in self.records.iter() {
+            keys.insert(i.to_string());
+        }
+
+        let mut v = Vec::new();
+        v.extend(keys.into_iter());
+        v.sort();
+
+        let s = v
             .iter()
             .map(|r| {
                 let key           = r.to_string();
@@ -81,7 +91,7 @@ impl GeneBank {
     pub fn register_genome(&mut self, genome: &Vec<Instruction>, mother: Option<Vec<Instruction>>)
     {
         let genome = (*genome).clone();
-        if mother.is_none() {
+        if mother.is_none() && self.find_genome_record(&genome).is_none() {
             self.records.push(GenomeRecord::new(genome, None));
             return;
         }
@@ -105,7 +115,10 @@ impl GeneBank {
     pub fn count_up_alive_genome(&mut self, genome: &Vec<Instruction>)
     {
         match self.find_genome_record(genome) {
-            None    => panic!("You have to register the genome !"),
+            None    => {
+                println!("{:?}", genome);
+                panic!("You have to register the genome !");
+            },
             Some(i) => {
                 let key = self.records[i].to_string();
                 let count = self.alive_count_map.remove(&key).unwrap_or(0);

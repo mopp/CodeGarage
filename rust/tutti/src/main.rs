@@ -77,7 +77,7 @@ fn main() {
         Nop0,
         IncA,
         IncB,
-        Jmp,
+        Jmpb,
         Nop0,
         Nop1,
         Nop0,

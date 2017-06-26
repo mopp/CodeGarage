@@ -108,6 +108,8 @@ fn main() {
         println!("# of creatures: {}", univ.count_creatures());
         println!("Genome usage rate: {}", univ.compute_genome_soup_used_rate());
         println!("Bank Info\n{}", univ.gene_bank());
+        println!("# of free regions {:?}", univ.free_regions.len());
+        // println!("{:?}", univ.free_regions);
         println!("==========");
     }
 }

@@ -13,7 +13,7 @@ const UNIVERSE_TOTAL_GENOME_CAPACITY: usize = 8 * 1024;
 
 pub struct Universe {
     genome_soup: [Instruction; UNIVERSE_TOTAL_GENOME_CAPACITY],
-    free_regions: Vec<MemoryRegion>,
+    pub free_regions: Vec<MemoryRegion>,
     creatures: VecDeque<Creature>,
     world_clock: usize,
     is_enable_random_mutate: bool,
@@ -87,13 +87,22 @@ impl Universe {
         match index {
             None => None,
             Some(index) => {
-                let v = self.free_regions.get_mut(index).unwrap();
+                let r =
+                {
+                    let v = self.free_regions.get_mut(index).unwrap();
 
-                let addr = v.addr;
-                v.addr += request_size;
-                v.size -= request_size;
+                    let addr = v.addr;
+                    v.addr += request_size;
+                    v.size -= request_size;
 
-                Some(MemoryRegion::new(addr, request_size))
+                    Some(MemoryRegion::new(addr, request_size))
+                };
+
+                if self.free_regions[index].size == 0 {
+                    self.free_regions.remove(index);
+                }
+
+                r
             }
         }
     }
@@ -101,6 +110,8 @@ impl Universe {
     fn free_genome_soup(&mut self, r: MemoryRegion)
     {
         debug_assert!(r.size != 0);
+        println!("ADD = {:?}", r);
+        println!("CURRENT = {:?}", self.free_regions);
 
         for v in self.free_regions.iter_mut() {
             if v.end_addr() == r.addr {
@@ -245,105 +256,105 @@ impl Universe {
                     Some(v) => cpu.dx = v,
                     None => {},
                 },
-            Jmp | Jmpb | Call => {
-                if ins == Call {
-                    let ip = cpu.ip;
-                    cpu.push(ip);
-                }
+                Jmp | Jmpb | Call => {
+                    if ins == Call {
+                        let ip = cpu.ip;
+                        cpu.push(ip);
+                    }
 
-                match self.search_complement_addr(cpu.ip as usize + 1, ins == Jmp || ins == Call) {
-                    None               => {},
-                    Some((addr, size)) => cpu.ip = (addr + size - 1) as u16,
-                }
-            },
-            Ret   =>
-                match cpu.pop() {
-                    Some(v) => cpu.ip = v,
-                    None => {},
+                    match self.search_complement_addr(cpu.ip as usize + 1, ins == Jmp || ins == Call) {
+                        None               => {},
+                        Some((addr, size)) => cpu.ip = (addr + size - 1) as u16,
+                    }
                 },
-            MovCd => cpu.dx = cx,
-            MovAb => cpu.bx = ax,
-            MovIab => {
-                let is_writable = |x, r: &MemoryRegion| {
-                    (r.addr <= x) && (x < r.end_addr())
-                };
-                let ax = ax as usize;
-
-                let is_write =
-                {
-                    let d = creature.daughter.as_ref();
-                    if d.is_some() && is_writable(ax, &d.unwrap().genome_region) {
-                        true
-                    } else if is_writable(ax, &creature.genome_region) {
-                        true
-                    } else {
-                        false
-                    }
-                };
-
-                if is_write {
-                    creature.count_copy += 1;
-                    let ins = self.genome_soup[bx as usize];
-                    self.genome_soup[ax as usize] =
-                        if self.is_enable_random_mutate && ((creature.count_copy % creature.mutate_threshold_copy_fail) == 0) {
-                            creature.randomize_mutate_threshold_copy_fail();
-                            ins.mutate_bit_randomly()
-                        } else {
-                            ins
-                        }
-                }
-            },
-            Adr => {
-                let ip = cpu.ip as usize + 1;
-                let f = self.search_complement_addr_forward(ip);
-                let b = self.search_complement_addr_backward(ip);
-                match (f, b) {
-                    (None, None)                           => {},
-                    (None, Some((addr, size)))                => cpu.ax = (addr + size) as u16,
-                    (Some((addr, size)), None)                => cpu.ax = (addr + size) as u16,
-                    (Some((addr_f, size_f)), Some((addr_b, size_b))) => {
-                        // Find the nearest one.
-                        cpu.ax =
-                            if (addr_f - ip) < (ip - addr_b) {
-                                (addr_f + size_f) as u16
-                            } else {
-                                (addr_b + size_b) as u16
-                            };
+                Ret   =>
+                    match cpu.pop() {
+                        Some(v) => cpu.ip = v,
+                        None => {},
                     },
-                }
-            },
-            Adrf | Adrb => {
-                match self.search_complement_addr(cpu.ip as usize + 1, ins == Adrf) {
-                    None               => {},
-                    Some((addr, size)) => cpu.ax = (addr + size) as u16,
-                }
-            },
-            Mal => {
-                match self.allocate_genome_soup(cx as usize) {
-                    None => {},
-                    Some(genome_region) => {
-                        cpu.ax = genome_region.addr as u16;
-                        creature.daughter = Some(Box::new(Creature::new(genome_region)));
+                MovCd => cpu.dx = cx,
+                MovAb => cpu.bx = ax,
+                MovIab => {
+                    let is_writable = |x, r: &MemoryRegion| {
+                        (r.addr <= x) && (x < r.end_addr())
+                    };
+                    let ax = ax as usize;
+
+                    let is_write =
+                    {
+                        let d = creature.daughter.as_ref();
+                        if d.is_some() && is_writable(ax, &d.unwrap().genome_region) {
+                            true
+                        } else if is_writable(ax, &creature.genome_region) {
+                            true
+                        } else {
+                            false
+                        }
+                    };
+
+                    if is_write {
+                        creature.count_copy += 1;
+                        let ins = self.genome_soup[bx as usize];
+                        self.genome_soup[ax as usize] =
+                            if self.is_enable_random_mutate && ((creature.count_copy % creature.mutate_threshold_copy_fail) == 0) {
+                                creature.randomize_mutate_threshold_copy_fail();
+                                ins.mutate_bit_randomly()
+                            } else {
+                                ins
+                            }
+                    }
+                },
+                Adr => {
+                    let ip = cpu.ip as usize + 1;
+                    let f = self.search_complement_addr_forward(ip);
+                    let b = self.search_complement_addr_backward(ip);
+                    match (f, b) {
+                        (None, None)                           => {},
+                        (None, Some((addr, size)))                => cpu.ax = (addr + size) as u16,
+                        (Some((addr, size)), None)                => cpu.ax = (addr + size) as u16,
+                        (Some((addr_f, size_f)), Some((addr_b, size_b))) => {
+                            // Find the nearest one.
+                            cpu.ax =
+                                if (addr_f - ip) < (ip - addr_b) {
+                                    (addr_f + size_f) as u16
+                                } else {
+                                    (addr_b + size_b) as u16
+                                };
+                        },
+                    }
+                },
+                Adrf | Adrb => {
+                    match self.search_complement_addr(cpu.ip as usize + 1, ins == Adrf) {
+                        None               => {},
+                        Some((addr, size)) => cpu.ax = (addr + size) as u16,
+                    }
+                },
+                Mal => {
+                    match self.allocate_genome_soup(cx as usize) {
+                        None => {},
+                        Some(genome_region) => {
+                            cpu.ax = genome_region.addr as u16;
+                            creature.daughter = Some(Box::new(Creature::new(genome_region)));
+                        }
+                    }
+                },
+                Divide => {
+                    if creature.daughter.is_some() {
+                        let daughter = creature.daughter.clone();
+                        creature.daughter = None;
+
+                        let mut daughter    = *daughter.unwrap();
+                        let daughter_genome = self.genome_soup[daughter.genome_region.range()].to_vec();
+                        let mother_genome   = self.genome_soup[creature.genome_region.range()].to_vec();
+                        self.gene_bank.register_genome(&daughter_genome, Some(mother_genome));
+                        self.gene_bank.count_up_alive_genome(&daughter_genome);
+
+                        if self.is_enable_random_mutate {
+                            daughter.randomize_mutate_threshold_copy_fail();
+                        }
+                        self.creatures.push_back(daughter);
                     }
                 }
-            },
-            Divide => {
-                if creature.daughter.is_some() {
-                    let daughter = creature.daughter.clone();
-                    creature.daughter = None;
-
-                    let mut daughter    = *daughter.unwrap();
-                    let daughter_genome = self.genome_soup[daughter.genome_region.range()].to_vec();
-                    let mother_genome   = self.genome_soup[creature.genome_region.range()].to_vec();
-                    self.gene_bank.register_genome(&daughter_genome, Some(mother_genome));
-                    self.gene_bank.count_up_alive_genome(&daughter_genome);
-
-                    if self.is_enable_random_mutate {
-                        daughter.randomize_mutate_threshold_copy_fail();
-                    }
-                    self.creatures.push_back(daughter);
-                }
-            }
         }
 
         creature.core = cpu;

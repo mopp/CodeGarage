@@ -225,10 +225,26 @@ impl Universe {
             PushBx => cpu.push(bx),
             PushCx => cpu.push(cx),
             PushDx => cpu.push(dx),
-            PopAx  => cpu.ax = cpu.pop(),
-            PopBx  => cpu.bx = cpu.pop(),
-            PopCx  => cpu.cx = cpu.pop(),
-            PopDx  => cpu.dx = cpu.pop(),
+            PopAx  =>
+                match cpu.pop() {
+                    Some(v) => cpu.ax = v,
+                    None => {},
+                },
+            PopBx  =>
+                match cpu.pop() {
+                    Some(v) => cpu.bx = v,
+                    None => {},
+                },
+            PopCx  =>
+                match cpu.pop() {
+                    Some(v) => cpu.cx = v,
+                    None => {},
+                },
+            PopDx  =>
+                match cpu.pop() {
+                    Some(v) => cpu.dx = v,
+                    None => {},
+                },
             Jmp | Jmpb | Call => {
                 if ins == Call {
                     let ip = cpu.ip;
@@ -240,7 +256,11 @@ impl Universe {
                     Some((addr, size)) => cpu.ip = (addr + size - 1) as u16,
                 }
             },
-            Ret   => cpu.ip = cpu.pop(),
+            Ret   =>
+                match cpu.pop() {
+                    Some(v) => cpu.ip = v,
+                    None => {},
+                },
             MovCd => cpu.dx = cx,
             MovAb => cpu.bx = ax,
             MovIab => {

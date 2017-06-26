@@ -14,6 +14,7 @@ pub struct Cpu {
     pub ip: Register,
     pub flags: u8,
     pub stack: [Register; 10],
+    pub count_fails: usize,
 }
 
 
@@ -40,22 +41,34 @@ impl Cpu {
             ip: 0,
             flags: 0,
             stack: [0; 10],
+            count_fails: 0,
         }
+    }
+
+    pub fn count_up_fails(&mut self)
+    {
+        self.count_fails += 1;
     }
 
     pub fn push(&mut self, v: Register)
     {
+        if self.stack.len() <= self.sp as usize {
+            self.count_up_fails();
+            return
+        }
+
         self.stack[self.sp as usize] = v;
         self.sp += 1;
     }
 
-    pub fn pop(&mut self) -> Register
+    pub fn pop(&mut self) -> Option<Register>
     {
         if self.sp == 0 {
-            panic!("Stack is empty.");
+            self.count_up_fails();
+            None
+        } else {
+            self.sp -= 1;
+            Some(self.stack[self.sp as usize])
         }
-
-        self.sp -= 1;
-        self.stack[self.sp as usize]
     }
 }

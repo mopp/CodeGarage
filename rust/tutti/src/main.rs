@@ -111,7 +111,7 @@ fn main() {
         println!("# of creatures: {}", univ.count_creatures());
         println!("Bank Info\n{}", univ.gene_bank());
         println!("# of free regions {:?}", univ.free_regions.len());
-        // println!("{:?}", univ.free_regions);
+        println!("{:?}", univ.free_regions);
         println!("==========");
 
         if univ.count_creatures() == 0 {

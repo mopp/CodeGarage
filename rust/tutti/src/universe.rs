@@ -386,11 +386,12 @@ impl Universe {
     fn increment_ip(&self, creature: &mut Creature)
     {
         let cpu = &mut creature.core;
-        cpu.ip += 1;
-
-        if creature.genome_region.end_addr() <= (cpu.ip as usize) {
-            cpu.ip = 0;
-        }
+        cpu.ip =
+            if (self.genome_soup.len() - 1) <= (cpu.ip as usize) {
+                creature.genome_region.addr as u16
+            } else {
+                cpu.ip + 1
+            };
     }
 
     fn one_instruction_cycle(&mut self, creature: &mut Creature)
@@ -604,9 +605,7 @@ mod tests {
         let (mut univ, c) = prepare_test_creature(&insts);
 
         univ.execute_creature_by_index(0, 4);
-        assert_eq!(univ.creatures[0].core, c.core);
-
-        univ.execute_creature_by_index(0, 4);
+        c.core.ip = c.genome_region.size as u16;
         assert_eq!(univ.creatures[0].core, c.core);
     }
 
@@ -660,11 +659,18 @@ mod tests {
     #[test]
     fn test_instruction_if_cz()
     {
-        let insts = [ IfCz, Or1, Nop0 ];
+        let insts = [
+            Nop1,
+            IfCz,
+            Or1,
+            Jmpb,
+            Nop0,
+            Zero,
+        ];
         let (mut univ, mut c) = prepare_test_creature(&insts);
 
-        univ.execute_creature_by_index(0, 1);
-        c.core.ip += 1;
+        univ.execute_creature_by_index(0, 2);
+        c.core.ip += 2;
         assert_eq!(univ.creatures[0].core, c.core);
 
         univ.execute_creature_by_index(0, 1);
@@ -673,7 +679,7 @@ mod tests {
         assert_eq!(univ.creatures[0].core, c.core);
 
         univ.execute_creature_by_index(0, 1);
-        c.core.ip = c.genome_region.addr as u16;
+        c.core.ip = c.genome_region.addr as u16 + 1;
         c.core.cx = 1;
         assert_eq!(univ.creatures[0].core, c.core);
 
@@ -686,18 +692,28 @@ mod tests {
     #[test]
     fn test_instruction_sub()
     {
-        let insts = [ IncA, IncA, IncB, SubAb, SubAc];
+        let insts = [
+            Nop1,
+            IncA,
+            IncA,
+            IncB,
+            SubAb,
+            SubAc,
+            Jmpb,
+            Nop0,
+            Zero,
+        ];
         let (mut univ, mut c) = prepare_test_creature(&insts);
 
-        univ.execute_creature_by_index(0, 4);
-        c.core.ip += 4;
+        univ.execute_creature_by_index(0, 5);
+        c.core.ip += 5;
         c.core.ax = 2;
         c.core.bx = 1;
         c.core.cx = 1;
         assert_eq!(univ.creatures[0].core, c.core);
 
-        univ.execute_creature_by_index(0, 1);
-        c.core.ip = c.genome_region.addr as u16;
+        univ.execute_creature_by_index(0, 2);
+        c.core.ip = c.genome_region.addr as u16 + 1;
         c.core.ax = 1;
         assert_eq!(univ.creatures[0].core, c.core);
     }
@@ -705,13 +721,16 @@ mod tests {
     #[test]
     fn test_instruction_inc_dec()
     {
-        let insts = [ IncA, IncB, IncA, IncB, IncC, IncC, IncC, DecC];
+        let insts = [
+            IncA, IncB, IncA, IncB, IncC, IncC, IncC, DecC,
+        ];
         let (mut univ, mut c) = prepare_test_creature(&insts);
 
         univ.execute_creature_by_index(0, 8);
         c.core.ax = 2;
         c.core.bx = 2;
         c.core.cx = 2;
+        c.core.ip = c.genome_region.size as u16;
         assert_eq!(univ.creatures[0].core, c.core);
     }
 
@@ -730,6 +749,7 @@ mod tests {
         c.core.stack[2] = 1;
         c.core.stack[3] = 0;
         c.core.sp       = 4;
+        c.core.ip = c.genome_region.size as u16;
         assert_eq!(univ.creatures[0].core, c.core);
     }
 
@@ -749,6 +769,7 @@ mod tests {
         c.core.bx = 1;
         c.core.cx = 1;
         c.core.dx = 1;
+        c.core.ip = c.genome_region.size as u16;
         assert_eq!(univ.creatures[0].core, c.core);
     }
 

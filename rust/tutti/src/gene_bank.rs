@@ -58,8 +58,9 @@ impl fmt::Display for GeneBank {
 
         let s = v
             .iter()
-            .map(|r| {
-                let key           = r.to_string();
+            .zip(self.records.iter())
+            .map(|(key, r)| {
+                let key = key.to_string();
                 let default_value = 0;
                 let alive_count   = self.alive_count_map.get(&key).unwrap_or(&default_value);
                 let dead_count    = self.dead_count_map.get(&key).unwrap_or(&default_value);
@@ -68,6 +69,7 @@ impl fmt::Display for GeneBank {
                     format!("  # of borns : {:>}", alive_count + dead_count),
                     format!("  # of alives: {:>}", alive_count),
                     format!("  # of deads : {:>}", dead_count),
+                    format!("  Genome     : {:?}",   r.genome),
                 ].join("\n")
             })
             .collect::<Vec<String>>()

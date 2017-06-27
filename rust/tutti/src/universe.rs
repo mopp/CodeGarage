@@ -431,6 +431,11 @@ impl Universe {
                 Some(target) => {
                     let v = self.genome_soup[target.genome_region.range()].to_vec();
                     self.gene_bank.count_up_dead_genome(&v);
+
+                    if let Some(daughter) = target.daughter {
+                        self.free_genome_soup(daughter.genome_region);
+                    }
+
                     self.free_genome_soup(target.genome_region);
                 },
             }

@@ -9,7 +9,7 @@ use std::collections::VecDeque;
 use std::mem;
 
 
-pub const UNIVERSE_TOTAL_GENOME_CAPACITY: usize = 80 * 7;
+pub const UNIVERSE_TOTAL_GENOME_CAPACITY: usize = 8 * 1024;
 
 pub struct Universe {
     genome_soup: [Instruction; UNIVERSE_TOTAL_GENOME_CAPACITY],
@@ -68,20 +68,27 @@ impl Universe {
         match self.allocate_genome_soup(instructions.len()) {
             None => panic!("no memory"),
             Some(genome_region) => {
-                let c = Creature::new(genome_region);
+                let mut c = Creature::new(genome_region);
                 self.write_instructions(c.genome_region.addr, instructions);
-                self.creatures.push_front(c);
 
                 let v = instructions.to_vec();
-                self.gene_bank.register_genome(&v, None);
-                self.gene_bank.count_up_alive_genome(&v);
+
+                {
+                    c.geno_type = self.gene_bank.register_genome(&v, None);
+                    self.gene_bank.count_up_alive_genome(c.geno_type.as_ref().unwrap());
+                }
+
+                self.creatures.push_front(c);
             }
         }
     }
 
     fn allocate_genome_soup(&mut self, request_size: usize) -> Option<MemoryRegion>
     {
-        debug_assert!(request_size != 0);
+        // debug_assert!(request_size != 0);
+        if request_size == 0 {
+            return None;
+        }
 
         let index = self.free_regions.iter().position(|x| request_size <= x.size);
         match index {
@@ -110,8 +117,6 @@ impl Universe {
     fn free_genome_soup(&mut self, r: MemoryRegion)
     {
         debug_assert!(r.size != 0);
-        println!("ADD     = {:?}", r);
-        println!("CURRENT = {:?}", self.free_regions);
 
         for v in self.free_regions.iter_mut() {
             if v.end_addr() == r.addr {
@@ -126,13 +131,12 @@ impl Universe {
 
         self.free_regions.push(r);
         self.free_regions.sort();
-        println!("PUSHED  = {:?}", self.free_regions);
     }
 
     pub fn compute_genome_soup_free_rate(&self) -> f64
     {
-        let used_genome = self.free_regions.iter().fold(0, |acc, ref x| acc + x.size) as f64;
-        (used_genome / (UNIVERSE_TOTAL_GENOME_CAPACITY as f64))
+        let sum = self.free_regions.iter().fold(0, |acc, ref x| acc + x.size) as f64;
+        (sum / (UNIVERSE_TOTAL_GENOME_CAPACITY as f64))
     }
 
     pub fn compute_genome_soup_used_rate(&self) -> f64
@@ -200,7 +204,8 @@ impl Universe {
     fn extract_argument_template(&self, addr: usize) -> Option<&[Instruction]>
     {
         // the addr have to be the beginning of the template you want to extract.
-        debug_assert_eq!(Instruction::is_nop(self.genome_soup[addr]), true);
+        // debug_assert_eq!(Instruction::is_nop(self.genome_soup[addr]), true);
+
         if Instruction::is_nop(self.genome_soup[addr]) == false {
             return None;
         }
@@ -279,17 +284,21 @@ impl Universe {
                 MovCd => cpu.dx = cx,
                 MovAb => cpu.bx = ax,
                 MovIab => {
+                    let ax = ax as usize;
+                    let bx = ax as usize;
+
                     let is_writable = |x, r: &MemoryRegion| {
                         (r.addr <= x) && (x < r.end_addr())
                     };
-                    let ax = ax as usize;
 
                     let is_write =
                     {
                         let d = creature.daughter.as_ref();
-                        if d.is_some() && is_writable(ax, &d.unwrap().genome_region) {
+                        let dr = &d.unwrap().genome_region;
+                        let mr = &creature.genome_region;
+                        if d.is_some() && is_writable(ax, dr) && (bx < self.genome_soup.len()) {
                             true
-                        } else if is_writable(ax, &creature.genome_region) {
+                        } else if is_writable(ax, mr) && (bx < self.genome_soup.len()) {
                             true
                         } else {
                             false
@@ -349,9 +358,11 @@ impl Universe {
 
                         let mut daughter    = *daughter.unwrap();
                         let daughter_genome = self.genome_soup[daughter.genome_region.range()].to_vec();
-                        let mother_genome   = self.genome_soup[creature.genome_region.range()].to_vec();
-                        self.gene_bank.register_genome(&daughter_genome, Some(mother_genome));
-                        self.gene_bank.count_up_alive_genome(&daughter_genome);
+
+                        {
+                            daughter.geno_type = self.gene_bank.register_genome(&daughter_genome, creature.geno_type.as_ref());
+                            self.gene_bank.count_up_alive_genome(daughter.geno_type.as_ref().unwrap());
+                        }
 
                         if self.is_enable_random_mutate {
                             daughter.randomize_mutate_threshold_copy_fail();
@@ -373,7 +384,8 @@ impl Universe {
     {
         let cpu = &mut creature.core;
         cpu.ip += 1;
-        if (cpu.ip as usize) == creature.genome_region.end_addr() {
+
+        if creature.genome_region.end_addr() <= (cpu.ip as usize) {
             cpu.ip = 0;
         }
     }
@@ -397,7 +409,7 @@ impl Universe {
 
             if self.is_enable_random_mutate && ((self.world_clock % self.mutate_threshold_cosmic_rays) == 0) {
                 let target_index = rand::thread_rng().gen_range(0, self.genome_soup.len());
-                // self.genome_soup[target_index] = self.genome_soup[target_index].mutate_bit_randomly();
+                self.genome_soup[target_index] = self.genome_soup[target_index].mutate_bit_randomly();
 
                 self.randomize_mutate_threshold_cosmic_rays();
             }
@@ -429,8 +441,7 @@ impl Universe {
             match self.creatures.pop_back() {
                 None         => panic!("!?"),
                 Some(target) => {
-                    let v = self.genome_soup[target.genome_region.range()].to_vec();
-                    self.gene_bank.count_up_dead_genome(&v);
+                    self.gene_bank.count_up_dead_genome(target.geno_type.as_ref().unwrap());
 
                     if let Some(daughter) = target.daughter {
                         self.free_genome_soup(daughter.genome_region);

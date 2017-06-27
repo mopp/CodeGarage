@@ -9,7 +9,6 @@ mod gene_bank;
 
 use instruction::Instruction;
 use universe::Universe;
-use memory_region::MemoryRegion;
 
 
 fn main() {
@@ -104,27 +103,17 @@ fn main() {
     univ.randomize_mutate_thresholds();
     loop {
         univ.execute_all_creatures(1.2);
-        println!("==========");
-        println!("Genome free rate:  {}", univ.compute_genome_soup_free_rate());
-        println!("Genome usage rate: {}", univ.compute_genome_soup_used_rate());
-        let sum = univ.creatures.iter().map(|x| x.genome_region.size).sum::<usize>() as f64;
-        let total = universe::UNIVERSE_TOTAL_GENOME_CAPACITY as f64;
-        let used_rate = sum / total;
-        assert_eq!(univ.compute_genome_soup_used_rate(), used_rate);
-        assert_eq!(univ.compute_genome_soup_free_rate(), 1.0 - used_rate);
-        println!("Genome usage rate: {}", sum);
-        println!("Genome  free rate: {}", total - sum);
-        println!("Genome usage rate: {}", sum / total);
-        println!("Genome  free rate: {}", 1.0 - sum / total);
-
         univ.wakeup_reaper_if_genome_usage_over(0.8);
 
+        println!("==========");
+        println!("Genome usage rate: {}", univ.compute_genome_soup_used_rate());
+        println!("Genome free rate:  {}", univ.compute_genome_soup_free_rate());
         println!("# of creatures: {}", univ.count_creatures());
         println!("Bank Info\n{}", univ.gene_bank());
         println!("# of free regions {:?}", univ.free_regions.len());
-        println!("creatures {:?}", univ.creatures.iter().map(|x| x.genome_region).collect::<Vec<MemoryRegion>>());
         println!("{:?}", univ.free_regions);
         println!("==========");
+
         if univ.count_creatures() == 0 {
             break;
         }

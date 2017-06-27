@@ -88,20 +88,28 @@ impl GeneBank {
         }
     }
 
-    pub fn register_genome(&mut self, genome: &Vec<Instruction>, mother: Option<Vec<Instruction>>)
+    pub fn register_genome(&mut self, genome: &Vec<Instruction>, mother: Option<&String>) -> Option<String>
     {
         let genome = (*genome).clone();
         if mother.is_none() && self.find_genome_record(&genome).is_none() {
-            self.records.push(GenomeRecord::new(genome, None));
-            return;
+            let r = GenomeRecord::new(genome, None);
+            let tag = r.to_string();
+            self.records.push(r);
+
+            return Some(tag);
         }
 
-        match (self.find_genome_record(&genome), self.find_genome_record(&mother.unwrap())) {
-            (None, Some(i)) => {
-                let m = self.records[i].clone();
-                self.records.push(GenomeRecord::new(genome, Some(Box::new(m))));
+        match (self.find_genome_record(&genome), self.find_genome_record_by_type(mother)) {
+            (None, Some(mother)) => {
+                let r = GenomeRecord::new(genome, Some(Box::new(mother)));
+                let tag = r.to_string();
+                self.records.push(r);
+                Some(tag)
             },
-            _ => {},
+            (Some(index), _) => {
+                Some(self.records[index].to_string())
+            }
+            (None, None) => panic!("None, None - {:?}", mother),
         }
     }
 
@@ -112,36 +120,34 @@ impl GeneBank {
             .position(|r| r.genome == *target)
     }
 
-    pub fn count_up_alive_genome(&mut self, genome: &Vec<Instruction>)
+    fn find_genome_record_by_type(&self, target: Option<&String>) -> Option<GenomeRecord>
     {
-        match self.find_genome_record(genome) {
-            None    => {
-                println!("{:?}", genome);
-                panic!("You have to register the genome !");
-            },
-            Some(i) => {
-                let key = self.records[i].to_string();
-                let count = self.alive_count_map.remove(&key).unwrap_or(0);
-                self.alive_count_map.insert(key.clone(), count + 1);
-            }
-        }
+        target
+            .and_then(|t| {
+                self.records
+                    .iter()
+                    .find(|x| x.to_string() == *t)
+            })
+            .and_then(|x| Some(x.clone()))
     }
 
-    pub fn count_up_dead_genome(&mut self, genome: &Vec<Instruction>)
+    pub fn count_up_alive_genome(&mut self, geno_type: &String)
     {
-        match self.find_genome_record(genome) {
-            None    => panic!("You have to register the genome !"),
-            Some(i) => {
-                let key = self.records[i].to_string();
-                let count = self.dead_count_map.remove(&key).unwrap_or(0);
-                self.dead_count_map.insert(key.clone(), count + 1);
+        let key = (*geno_type).clone();
+        let count = self.alive_count_map.remove(&key).unwrap_or(0);
+        self.alive_count_map.insert(key, count + 1);
+    }
 
-                let m = &mut self.alive_count_map;
-                if m.contains_key(&key) {
-                    let count = m.remove(&key).unwrap();
-                    m.insert(key, count - 1);
-                }
-            }
+    pub fn count_up_dead_genome(&mut self, geno_type: &String)
+    {
+        let key = (*geno_type).clone();
+        let count = self.dead_count_map.remove(&key).unwrap_or(0);
+        self.dead_count_map.insert(key.clone(), count + 1);
+
+        let m = &mut self.alive_count_map;
+        if m.contains_key(&key) {
+            let count = m.remove(&key).unwrap();
+            m.insert(key, count - 1);
         }
     }
 }

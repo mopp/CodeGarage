@@ -11,6 +11,7 @@ pub struct Creature {
     pub daughter: Option<Box<Creature>>,
     pub mutate_threshold_copy_fail: usize,
     pub count_copy: usize,
+    pub geno_type: Option<String>,
 }
 
 
@@ -25,6 +26,7 @@ impl Creature {
             daughter: None,
             mutate_threshold_copy_fail: 0,
             count_copy: 0,
+            geno_type: None,
         }
     }
 

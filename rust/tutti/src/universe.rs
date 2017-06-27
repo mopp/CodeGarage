@@ -9,7 +9,7 @@ use std::collections::VecDeque;
 use std::mem;
 
 
-const UNIVERSE_TOTAL_GENOME_CAPACITY: usize = 80 * 7;
+pub const UNIVERSE_TOTAL_GENOME_CAPACITY: usize = 80 * 7;
 
 pub struct Universe {
     genome_soup: [Instruction; UNIVERSE_TOTAL_GENOME_CAPACITY],

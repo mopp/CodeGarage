@@ -133,10 +133,14 @@ impl Universe {
         self.free_regions.sort();
     }
 
+    fn compute_genome_soup_free_size(&self) -> usize
+    {
+        self.free_regions.iter().fold(0, |acc, ref x| acc + x.size)
+    }
+
     pub fn compute_genome_soup_free_rate(&self) -> f64
     {
-        let sum = self.free_regions.iter().fold(0, |acc, ref x| acc + x.size) as f64;
-        (sum / (UNIVERSE_TOTAL_GENOME_CAPACITY as f64))
+        (self.compute_genome_soup_free_size() as f64 / (UNIVERSE_TOTAL_GENOME_CAPACITY as f64))
     }
 
     pub fn compute_genome_soup_used_rate(&self) -> f64
@@ -294,11 +298,9 @@ impl Universe {
                     let is_write =
                     {
                         let d = creature.daughter.as_ref();
-                        let dr = &d.unwrap().genome_region;
-                        let mr = &creature.genome_region;
-                        if d.is_some() && is_writable(ax, dr) && (bx < self.genome_soup.len()) {
+                        if d.is_some() && is_writable(ax, &d.unwrap().genome_region) && (bx < self.genome_soup.len()) {
                             true
-                        } else if is_writable(ax, mr) && (bx < self.genome_soup.len()) {
+                        } else if is_writable(ax, &creature.genome_region) && (bx < self.genome_soup.len()) {
                             true
                         } else {
                             false
@@ -361,6 +363,7 @@ impl Universe {
 
                         {
                             daughter.geno_type = self.gene_bank.register_genome(&daughter_genome, creature.geno_type.as_ref());
+                            debug_assert_eq!(daughter.geno_type.is_some(), true);
                             self.gene_bank.count_up_alive_genome(daughter.geno_type.as_ref().unwrap());
                         }
 
@@ -470,6 +473,45 @@ mod tests {
     use super::*;
     use instruction::*;
     use instruction::Instruction::*;
+
+    #[test]
+    fn test_alloc_free()
+    {
+        let mut univ = Universe::new();
+        assert_eq!(univ.allocate_genome_soup(0), None);
+
+        let r1 = univ.allocate_genome_soup(10).unwrap();
+        assert_eq!(r1.addr, 0);
+        assert_eq!(r1.size, 10);
+        assert_eq!(univ.compute_genome_soup_free_size(), UNIVERSE_TOTAL_GENOME_CAPACITY - 10);
+
+        let r2 = univ.allocate_genome_soup(1000).unwrap();
+        assert_eq!(r2.addr, 10);
+        assert_eq!(r2.size, 1000);
+        assert_eq!(univ.compute_genome_soup_free_size(), UNIVERSE_TOTAL_GENOME_CAPACITY - 10 - 1000);
+
+        univ.free_genome_soup(r1);
+        assert_eq!(univ.compute_genome_soup_free_size(), UNIVERSE_TOTAL_GENOME_CAPACITY - 1000);
+
+        let r1 = univ.allocate_genome_soup(10).unwrap();
+        assert_eq!(r1.addr, 0);
+        assert_eq!(r1.size, 10);
+        assert_eq!(univ.compute_genome_soup_free_size(), UNIVERSE_TOTAL_GENOME_CAPACITY - 10 - 1000);
+        univ.free_genome_soup(r1);
+
+        let r2 = univ.allocate_genome_soup(2000).unwrap();
+        assert_eq!(r2.addr, 1010);
+        assert_eq!(r2.size, 2000);
+        assert_eq!(univ.compute_genome_soup_free_size(), UNIVERSE_TOTAL_GENOME_CAPACITY - 3000);
+
+        let r3 = univ.allocate_genome_soup(500).unwrap();
+        assert_eq!(r3.addr, 3010);
+        assert_eq!(r3.size, 500);
+        assert_eq!(univ.compute_genome_soup_free_size(), UNIVERSE_TOTAL_GENOME_CAPACITY - 3500);
+
+        univ.free_genome_soup(r2);
+        assert_eq!(univ.compute_genome_soup_free_size(), UNIVERSE_TOTAL_GENOME_CAPACITY - 1500);
+    }
 
     #[test]
     fn test_extract_argument_template()

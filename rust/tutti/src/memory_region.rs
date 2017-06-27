@@ -32,7 +32,7 @@ impl MemoryRegion {
 impl Ord for MemoryRegion {
     fn cmp(&self, other: &MemoryRegion) -> Ordering
     {
-        other.addr.cmp(&self.addr)
+        self.addr.cmp(&other.addr)
     }
 }
 

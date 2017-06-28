@@ -289,7 +289,7 @@ impl Universe {
                 MovAb => cpu.bx = ax,
                 MovIab => {
                     let ax = ax as usize;
-                    let bx = ax as usize;
+                    let bx = bx as usize;
 
                     let is_writable = |x, r: &MemoryRegion| {
                         (r.addr <= x) && (x < r.end_addr())
@@ -602,7 +602,7 @@ mod tests {
     fn test_instruction_nop()
     {
         let insts = [ Nop0, Nop1, Nop0, Nop1 ];
-        let (mut univ, c) = prepare_test_creature(&insts);
+        let (mut univ, mut c) = prepare_test_creature(&insts);
 
         univ.execute_creature_by_index(0, 4);
         c.core.ip = c.genome_region.size as u16;
@@ -612,46 +612,71 @@ mod tests {
     #[test]
     fn test_instruction_or1()
     {
-        let insts = [ Or1 ];
+        let insts = [
+            Nop1,
+            Or1,
+            Jmpb,
+            Nop0,
+            Zero,
+        ];
         let (mut univ, mut c) = prepare_test_creature(&insts);
 
-        univ.execute_creature_by_index(0, 1);
+        univ.execute_creature_by_index(0, 2);
         c.core.cx = 1;
+        c.core.ip = 2;
         assert_eq!(univ.creatures[0].core, c.core);
 
-        univ.execute_creature_by_index(0, 1);
+        univ.execute_creature_by_index(0, 2);
         c.core.cx = 0;
+        c.core.ip = 2;
         assert_eq!(univ.creatures[0].core, c.core);
     }
 
     #[test]
     fn test_instruction_shl()
     {
-        let insts = [ Or1, Shl ];
+        let insts = [
+            Nop0,
+            Or1,
+            Shl,
+            Jmpb,
+            Nop1,
+            Zero,
+        ];
         let (mut univ, mut c) = prepare_test_creature(&insts);
 
-        univ.execute_creature_by_index(0, 2);
+        univ.execute_creature_by_index(0, 4);
         c.core.cx = 2;
+        c.core.ip = 1;
         assert_eq!(univ.creatures[0].core, c.core);
 
         univ.execute_creature_by_index(0, 2);
         c.core.cx = 3 << 1;
+        c.core.ip += 2;
         assert_eq!(univ.creatures[0].core, c.core);
     }
 
     #[test]
     fn test_instruction_zero()
     {
-        let insts = [ Or1, Shl, Zero ];
+        let insts = [
+            Nop1,
+            Or1,
+            Shl,
+            Zero,
+            Jmpb,
+            Nop0,
+            Zero,
+        ];
         let (mut univ, mut c) = prepare_test_creature(&insts);
 
-        univ.execute_creature_by_index(0, 2);
-        c.core.ip += 2;
+        univ.execute_creature_by_index(0, 3);
+        c.core.ip += 3;
         c.core.cx = 2;
         assert_eq!(univ.creatures[0].core, c.core);
 
-        univ.execute_creature_by_index(0, 1);
-        c.core.ip = c.genome_region.addr as u16;
+        univ.execute_creature_by_index(0, 2);
+        c.core.ip = c.genome_region.addr as u16 + 1;
         c.core.cx = 0;
         assert_eq!(univ.creatures[0].core, c.core);
     }
@@ -928,7 +953,7 @@ mod tests {
         assert_eq!(univ.creatures[0].core, c.core);
 
         univ.execute_creature_by_index(0, 1);
-        c.core.ip -= 4;
+        c.core.ip += 1;
         assert_eq!(univ.creatures[0].core, c.core);
         assert_eq!(univ.creatures[0].daughter.is_none(), true);
         assert_eq!(univ.creatures[1].genome_region.addr, c.core.ax as usize);

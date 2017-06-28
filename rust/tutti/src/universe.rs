@@ -250,8 +250,8 @@ impl Universe {
         let mut cpu = creature.core.clone();
         let (ax, bx, cx, dx) = (cpu.ax, cpu.bx, cpu.cx, cpu.dx);
         match ins {
-            Nop0 => cpu.count_up_fails(),
-            Nop1 => cpu.count_up_fails(),
+            Nop0 => {},
+            Nop1 => {},
             Or1 => cpu.cx = cx ^ 1,
             Shl => cpu.cx = cx << 1,
             Zero => cpu.cx = 0,

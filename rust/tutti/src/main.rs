@@ -102,16 +102,21 @@ fn main() {
     univ.enable_random_mutate();
     univ.randomize_mutate_thresholds();
     loop {
-        univ.execute_all_creatures(1.2);
+        univ.execute_all_creatures(1.1);
         univ.wakeup_reaper_if_genome_usage_over(0.8);
 
         println!("==========");
+        println!("Genome used size: {}", universe::UNIVERSE_TOTAL_GENOME_CAPACITY - univ.compute_genome_soup_free_size());
+        println!("Genome free size: {}", univ.compute_genome_soup_free_size());
+
+        assert_eq!(universe::UNIVERSE_TOTAL_GENOME_CAPACITY, univ.compute_genome_soup_free_size() + univ.compute_genome_soup_used_size());
+
         println!("Genome usage rate: {}", univ.compute_genome_soup_used_rate());
         println!("Genome free rate:  {}", univ.compute_genome_soup_free_rate());
         println!("# of creatures: {}", univ.count_creatures());
         println!("Bank Info\n{}", univ.gene_bank());
         println!("# of free regions {:?}", univ.free_regions.len());
-        println!("{:?}", univ.free_regions);
+        // println!("{:?}", univ.free_regions);
         println!("==========");
 
         if univ.count_creatures() == 0 {

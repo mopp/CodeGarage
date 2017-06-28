@@ -3,8 +3,9 @@ extern crate rand;
 use cpu::Cpu;
 use memory_region::MemoryRegion;
 use rand::Rng;
+use std::cmp::Ordering;
 
-#[derive(Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Creature {
     pub core: Cpu,
     pub genome_region: MemoryRegion,
@@ -13,6 +14,21 @@ pub struct Creature {
     pub count_copy: usize,
     pub geno_type: Option<String>,
 }
+
+
+impl Ord for Creature {
+    fn cmp(&self, other: &Creature) -> Ordering {
+        self.core.count_fails.cmp(&other.core.count_fails)
+    }
+}
+
+
+impl PartialOrd for Creature {
+    fn partial_cmp(&self, other: &Creature) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
 
 
 impl Creature {

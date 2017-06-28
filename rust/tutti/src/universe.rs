@@ -5,16 +5,15 @@ use gene_bank::GeneBank;
 use instruction::Instruction;
 use memory_region::MemoryRegion;
 use rand::Rng;
-use std::collections::VecDeque;
 use std::mem;
 
 
-pub const UNIVERSE_TOTAL_GENOME_CAPACITY: usize = 2 * 1024;
+pub const UNIVERSE_TOTAL_GENOME_CAPACITY: usize = 8 * 1024;
 
 pub struct Universe {
     genome_soup: [Instruction; UNIVERSE_TOTAL_GENOME_CAPACITY],
     pub free_regions: Vec<MemoryRegion>,
-    pub creatures: VecDeque<Creature>,
+    pub creatures: Vec<Creature>,
     world_clock: usize,
     is_enable_random_mutate: bool,
     mutate_threshold_cosmic_rays: usize,
@@ -32,7 +31,7 @@ impl Universe {
         Universe {
             genome_soup: soup,
             free_regions: free_regions,
-            creatures: VecDeque::new(),
+            creatures: Vec::new(),
             world_clock: 0,
             is_enable_random_mutate: false,
             mutate_threshold_cosmic_rays: 2500,
@@ -78,7 +77,7 @@ impl Universe {
                     self.gene_bank.count_up_alive_genome(c.geno_type.as_ref().unwrap());
                 }
 
-                self.creatures.push_front(c);
+                self.creatures.push(c);
             }
         }
     }
@@ -271,130 +270,130 @@ impl Universe {
             PopAx  =>
                 match cpu.pop() {
                     Some(v) => cpu.ax = v,
-                    None => {},
+                    None    => cpu.count_up_fails(),
                 },
             PopBx  =>
                 match cpu.pop() {
                     Some(v) => cpu.bx = v,
-                    None => {},
+                    None    => cpu.count_up_fails(),
                 },
             PopCx  =>
                 match cpu.pop() {
                     Some(v) => cpu.cx = v,
-                    None => {},
+                    None    => cpu.count_up_fails(),
                 },
             PopDx  =>
                 match cpu.pop() {
                     Some(v) => cpu.dx = v,
-                    None => {},
+                    None    => cpu.count_up_fails(),
                 },
-                Jmp | Jmpb | Call => {
-                    if ins == Call {
-                        let ip = cpu.ip;
-                        cpu.push(ip);
-                    }
+            Jmp | Jmpb | Call => {
+                if ins == Call {
+                    let ip = cpu.ip;
+                    cpu.push(ip);
+                }
 
-                    match self.search_complement_addr(cpu.ip as usize + 1, ins == Jmp || ins == Call) {
-                        None               => {},
-                        Some((addr, size)) => cpu.ip = (addr + size - 1) as u16,
-                    }
+                match self.search_complement_addr(cpu.ip as usize + 1, ins == Jmp || ins == Call) {
+                    None               => cpu.count_up_fails(),
+                    Some((addr, size)) => cpu.ip = (addr + size - 1) as u16,
+                }
+            },
+            Ret   =>
+                match cpu.pop() {
+                    None => cpu.count_up_fails(),
+                    Some(v) => cpu.ip = v,
                 },
-                Ret   =>
-                    match cpu.pop() {
-                        Some(v) => cpu.ip = v,
-                        None => {},
-                    },
-                MovCd => cpu.dx = cx,
-                MovAb => cpu.bx = ax,
-                MovIab => {
-                    let ax = ax as usize;
-                    let bx = bx as usize;
+            MovCd  => cpu.dx = cx,
+            MovAb  => cpu.bx = ax,
+            MovIab => {
+                let ax = ax as usize;
+                let bx = bx as usize;
 
-                    let is_writable = |x, r: &MemoryRegion| {
-                        (r.addr <= x) && (x < r.end_addr())
-                    };
+                let is_writable = |x, r: &MemoryRegion| {
+                    (r.addr <= x) && (x < r.end_addr())
+                };
 
-                    let is_write =
-                    {
-                        let d = creature.daughter.as_ref();
-                        if d.is_some() && is_writable(ax, &d.unwrap().genome_region) && (bx < self.genome_soup.len()) {
-                            true
-                        } else if is_writable(ax, &creature.genome_region) && (bx < self.genome_soup.len()) {
-                            true
+                let is_write =
+                {
+                    let d = creature.daughter.as_ref();
+                    if d.is_some() && is_writable(ax, &d.unwrap().genome_region) && (bx < self.genome_soup.len()) {
+                        true
+                    } else if is_writable(ax, &creature.genome_region) && (bx < self.genome_soup.len()) {
+                        true
+                    } else {
+                        false
+                    }
+                };
+
+                if is_write {
+                    creature.count_copy += 1;
+                    let ins = self.genome_soup[bx as usize];
+                    self.genome_soup[ax as usize] =
+                        if self.is_enable_random_mutate && ((creature.count_copy % creature.mutate_threshold_copy_fail) == 0) {
+                            creature.randomize_mutate_threshold_copy_fail();
+                            ins.mutate_bit_randomly()
                         } else {
-                            false
+                            ins
                         }
-                    };
-
-                    if is_write {
-                        creature.count_copy += 1;
-                        let ins = self.genome_soup[bx as usize];
-                        self.genome_soup[ax as usize] =
-                            if self.is_enable_random_mutate && ((creature.count_copy % creature.mutate_threshold_copy_fail) == 0) {
-                                creature.randomize_mutate_threshold_copy_fail();
-                                ins.mutate_bit_randomly()
+                }
+            },
+            Adr => {
+                let ip = cpu.ip as usize + 1;
+                let f = self.search_complement_addr_forward(ip);
+                let b = self.search_complement_addr_backward(ip);
+                match (f, b) {
+                    (None, None)                                     => cpu.count_up_fails(),
+                    (None, Some((addr, size)))                       => cpu.ax = (addr + size) as u16,
+                    (Some((addr, size)), None)                       => cpu.ax = (addr + size) as u16,
+                    (Some((addr_f, size_f)), Some((addr_b, size_b))) => {
+                        // Find the nearest one.
+                        cpu.ax =
+                            if (addr_f - ip) < (ip - addr_b) {
+                                (addr_f + size_f) as u16
                             } else {
-                                ins
-                            }
-                    }
-                },
-                Adr => {
-                    let ip = cpu.ip as usize + 1;
-                    let f = self.search_complement_addr_forward(ip);
-                    let b = self.search_complement_addr_backward(ip);
-                    match (f, b) {
-                        (None, None)                           => {},
-                        (None, Some((addr, size)))                => cpu.ax = (addr + size) as u16,
-                        (Some((addr, size)), None)                => cpu.ax = (addr + size) as u16,
-                        (Some((addr_f, size_f)), Some((addr_b, size_b))) => {
-                            // Find the nearest one.
-                            cpu.ax =
-                                if (addr_f - ip) < (ip - addr_b) {
-                                    (addr_f + size_f) as u16
-                                } else {
-                                    (addr_b + size_b) as u16
-                                };
-                        },
-                    }
-                },
-                Adrf | Adrb => {
-                    match self.search_complement_addr(cpu.ip as usize + 1, ins == Adrf) {
-                        None               => {},
-                        Some((addr, size)) => cpu.ax = (addr + size) as u16,
-                    }
-                },
-                Mal => {
-                    match self.allocate_genome_soup(cx as usize) {
-                        None => {},
-                        Some(genome_region) => {
-                            cpu.ax = genome_region.addr as u16;
-                            if let Some(ref mut daughter) = creature.daughter {
-                                self.free_genome_soup(daughter.genome_region);
-                            }
-                            creature.daughter = Some(Box::new(Creature::new(genome_region)));
+                                (addr_b + size_b) as u16
+                            };
+                    },
+                }
+            },
+            Adrf | Adrb => {
+                match self.search_complement_addr(cpu.ip as usize + 1, ins == Adrf) {
+                    None               => cpu.count_up_fails(),
+                    Some((addr, size)) => cpu.ax = (addr + size) as u16,
+                }
+            },
+            Mal => {
+                match self.allocate_genome_soup(cx as usize) {
+                    None                => cpu.count_up_fails(),
+                    Some(genome_region) => {
+                        cpu.ax = genome_region.addr as u16;
+                        if let Some(ref mut daughter) = creature.daughter {
+                            self.free_genome_soup(daughter.genome_region);
                         }
-                    }
-                },
-                Divide => {
-                    if creature.daughter.is_some() {
-                        let daughter = creature.daughter.clone();
-                        creature.daughter = None;
-
-                        let mut daughter    = *daughter.unwrap();
-                        let daughter_genome = self.genome_soup[daughter.genome_region.range()].to_vec();
-
-                        {
-                            daughter.geno_type = self.gene_bank.register_genome(&daughter_genome, creature.geno_type.as_ref());
-                            debug_assert_eq!(daughter.geno_type.is_some(), true);
-                            self.gene_bank.count_up_alive_genome(daughter.geno_type.as_ref().unwrap());
-                        }
-
-                        if self.is_enable_random_mutate {
-                            daughter.randomize_mutate_threshold_copy_fail();
-                        }
-                        self.creatures.push_back(daughter);
+                        creature.daughter = Some(Box::new(Creature::new(genome_region)));
                     }
                 }
+            },
+            Divide => {
+                if creature.daughter.is_some() {
+                    let daughter = creature.daughter.clone();
+                    creature.daughter = None;
+
+                    let mut daughter    = *daughter.unwrap();
+                    let daughter_genome = self.genome_soup[daughter.genome_region.range()].to_vec();
+
+                    {
+                        daughter.geno_type = self.gene_bank.register_genome(&daughter_genome, creature.geno_type.as_ref());
+                        debug_assert_eq!(daughter.geno_type.is_some(), true);
+                        self.gene_bank.count_up_alive_genome(daughter.geno_type.as_ref().unwrap());
+                    }
+
+                    if self.is_enable_random_mutate {
+                        daughter.randomize_mutate_threshold_copy_fail();
+                    }
+                    self.creatures.push(daughter);
+                }
+            }
         }
 
         creature.core = cpu;
@@ -451,7 +450,9 @@ impl Universe {
 
     pub fn execute_all_creatures(&mut self, power: f64)
     {
-        let mut cs = mem::replace(&mut self.creatures, VecDeque::new());
+        self.creatures.sort();
+
+        let mut cs = mem::replace(&mut self.creatures, Vec::new());
         for c in cs.iter_mut() {
             let size = c.genome_region.size as f64;
             let time_slice = size.powf(power).floor() as usize;
@@ -464,7 +465,7 @@ impl Universe {
     pub fn wakeup_reaper_if_genome_usage_over(&mut self, threshold:f64)
     {
         while threshold < self.compute_genome_soup_used_rate() {
-            match self.creatures.pop_back() {
+            match self.creatures.pop() {
                 None         => panic!("!?"),
                 Some(target) => {
                     self.gene_bank.count_up_dead_genome(target.geno_type.as_ref().unwrap());

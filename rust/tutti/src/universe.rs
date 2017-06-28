@@ -235,6 +235,13 @@ impl Universe {
             .position(|&x| Instruction::is_nop(x) == false)
             .or(Some(target_region.len() - 1))
             .map(|tail_index| &target_region[0..tail_index])
+            .and_then(|r| {
+                if r.len() == 0 {
+                    None
+                } else {
+                    Some(r)
+                }
+            })
     }
 
     fn execute(&mut self, creature: &mut Creature, ins: Instruction)

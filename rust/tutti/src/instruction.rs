@@ -86,8 +86,9 @@ impl Instruction {
 
     pub fn mutate_bit_randomly(&self) -> Instruction
     {
-        let target_bit = rand::thread_rng().gen_range(0, 5);
-        Instruction::from_usize((*self as usize) ^ (1 << target_bit))
+        // let target_bit = rand::thread_rng().gen_range(0, 5);
+        // Instruction::from_usize((*self as usize) ^ (1 << target_bit))
+        Instruction::from_usize(rand::thread_rng().gen_range(0, 0x1F + 1))
     }
 }
 

@@ -340,6 +340,8 @@ impl Universe {
                     } else {
                         ins
                     }
+                } else {
+                    cpu.count_up_fails();
                 }
             }
             Adr => {
@@ -397,6 +399,8 @@ impl Universe {
                         daughter.randomize_mutate_threshold_copy_fail();
                     }
                     self.creatures.push(daughter);
+                } else {
+                    cpu.count_up_fails();
                 }
             }
         }

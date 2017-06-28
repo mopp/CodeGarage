@@ -184,6 +184,6 @@ impl GeneBank {
                 ].join("\n")
             })
             .collect::<Vec<String>>()
-            .join("\n")
+            .join("\n\n")
     }
 }

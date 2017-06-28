@@ -24,7 +24,7 @@ pub struct Universe {
 impl Universe {
     pub fn new() -> Universe
     {
-        let soup = [Instruction::Nop0; UNIVERSE_TOTAL_GENOME_CAPACITY];
+        let soup = [Instruction::IfCz; UNIVERSE_TOTAL_GENOME_CAPACITY];
         let mut free_regions = Vec::new();
         free_regions.push(MemoryRegion::new(0, soup.len()));
 

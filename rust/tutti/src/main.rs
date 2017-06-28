@@ -18,6 +18,7 @@ use std::io::prelude::*;
 use std::thread;
 use universe::Universe;
 use chrono::Local;
+use gene_bank::GeneBank;
 
 
 fn main() {
@@ -26,6 +27,9 @@ fn main() {
     let signal = chan_signal::notify(&[Signal::INT, Signal::TERM]);
     let (sdone, rdone) = chan::sync(0);
     thread::spawn(move || run(sdone));
+
+    let dump_filename = Local::now().format("%Y%m%d%H%M%S.txt").to_string();
+    let mut loop_cnt = 0;
 
     use Instruction::*;
 
@@ -137,17 +141,24 @@ fn main() {
             panic!("NO CREATURES !");
         }
 
+        let dump_to_file = |filename: &String, bank: &GeneBank| {
+            let mut file = File::create(filename).unwrap();
+            file.write_fmt(format_args!("{}", bank.dump_all_recorded_genoms())).unwrap();
+        };
+
         chan_select! {
             signal.recv() -> _ => {
-                let filename = Local::now().format("%Y%m%d%H%M%S.txt").to_string();
-
-                println!("\n\nDUMP ALL GENOMEs to {}", filename);
-
-                let mut file = File::create(filename).unwrap();
-                file.write_fmt(format_args!("{}", univ.gene_bank.dump_all_recorded_genoms())).unwrap();
+                println!("\n\nDUMP ALL GENOMEs to {}", dump_filename);
+                dump_to_file(&dump_filename, &univ.gene_bank);
                 break;
             },
-            rdone.recv() => { }
+            rdone.recv() => {
+                loop_cnt += 1;
+                if loop_cnt % 10 == 0 {
+                    dump_to_file(&dump_filename, &univ.gene_bank);
+                    loop_cnt = 0;
+                }
+            }
         }
     }
 }

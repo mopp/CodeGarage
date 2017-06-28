@@ -17,7 +17,7 @@ pub struct Universe {
     world_clock: usize,
     is_enable_random_mutate: bool,
     mutate_threshold_cosmic_rays: usize,
-    gene_bank: GeneBank,
+    pub gene_bank: GeneBank,
 }
 
 
@@ -45,7 +45,6 @@ impl Universe {
             return;
         }
 
-
         for c in self.creatures.iter_mut() {
             c.randomize_mutate_threshold_copy_fail();
         }
@@ -71,7 +70,6 @@ impl Universe {
                 self.write_instructions(c.genome_region.addr, instructions);
 
                 let v = instructions.to_vec();
-
                 {
                     c.geno_type = self.gene_bank.register_genome(&v, None);
                     self.gene_bank.count_up_alive_genome(c.geno_type.as_ref().unwrap());
@@ -82,19 +80,20 @@ impl Universe {
         }
     }
 
-    fn allocate_genome_soup(&mut self, request_size: usize) -> Option<MemoryRegion>
-    {
+    fn allocate_genome_soup(&mut self, request_size: usize) -> Option<MemoryRegion> {
         // debug_assert!(request_size != 0);
         if request_size == 0 {
             return None;
         }
 
-        let index = self.free_regions.iter().position(|x| request_size <= x.size);
+        let index = self.free_regions
+            .iter()
+            .position(|x| request_size <= x.size);
+
         match index {
             None => None,
             Some(index) => {
-                let r =
-                {
+                let r = {
                     let v = self.free_regions.get_mut(index).unwrap();
 
                     let addr = v.addr;
@@ -139,15 +138,13 @@ impl Universe {
 
     pub fn compute_genome_soup_used_size(&self) -> usize
     {
-        self.creatures
-            .iter()
-            .fold(0, |acc, ref x| {
-                acc + x.genome_region.size +
-                    match x.daughter {
-                        None        => 0,
-                        Some(ref d) => d.genome_region.size,
-                    }
-            })
+        self.creatures.iter().fold(0, |acc, ref x| {
+            acc + x.genome_region.size +
+                match x.daughter {
+                    None        => 0,
+                    Some(ref d) => d.genome_region.size,
+                }
+        })
     }
 
     pub fn compute_genome_soup_free_rate(&self) -> f64
@@ -184,28 +181,28 @@ impl Universe {
                             _    => panic!("invalid instruction"),
                         }
                     })
-                .collect::<Vec<Instruction>>()
+                    .collect::<Vec<Instruction>>()
             })
-        .and_then(|complement_template| {
-            let len = complement_template.len();
-            let is_equal_pattern = |window| complement_template == window;
+            .and_then(|complement_template| {
+                let len = complement_template.len();
+                let is_equal_pattern = |window| complement_template == window;
 
-            match is_forward {
-                true => {
-                    (&self.genome_soup[(addr + len)..self.genome_soup.len()])
-                        .windows(len)
-                        .position(is_equal_pattern)
-                        .map(|addr_diff| addr + len + addr_diff)
-                },
-                false => {
-                    (&self.genome_soup[0..addr])
-                        .windows(len)
-                        .rposition(is_equal_pattern)
-                        .map(|addr_diff| addr_diff)
+                match is_forward {
+                    true => {
+                        (&self.genome_soup[(addr + len)..self.genome_soup.len()])
+                            .windows(len)
+                            .position(is_equal_pattern)
+                            .map(|addr_diff| addr + len + addr_diff)
+                    }
+                    false => {
+                        (&self.genome_soup[0..addr])
+                            .windows(len)
+                            .rposition(is_equal_pattern)
+                            .map(|addr_diff| addr_diff)
+                    }
                 }
-            }
-            .map(|complement_addr| (complement_addr, len))
-        })
+                .map(|complement_addr| (complement_addr, len))
+            })
     }
 
     fn search_complement_addr_forward(&self, addr: usize) -> Option<(usize, usize)>
@@ -246,47 +243,51 @@ impl Universe {
         let mut cpu = creature.core.clone();
         let (ax, bx, cx, dx) = (cpu.ax, cpu.bx, cpu.cx, cpu.dx);
         match ins {
-            Nop0   => {},
-            Nop1   => {},
-            Or1    => cpu.cx = cx ^ 1,
-            Shl    => cpu.cx = cx << 1,
-            Zero   => cpu.cx = 0,
-            IfCz   => {
+            Nop0 => cpu.count_up_fails(),
+            Nop1 => cpu.count_up_fails(),
+            Or1 => cpu.cx = cx ^ 1,
+            Shl => cpu.cx = cx << 1,
+            Zero => cpu.cx = 0,
+            IfCz => {
                 if cx != 0 {
                     // Skip the next instruction.
                     cpu.ip += 1;
                 }
-            },
-            SubAb  => cpu.cx = ax.overflowing_sub(bx).0,
-            SubAc  => cpu.ax = ax.overflowing_sub(cx).0,
-            IncA   => cpu.ax = ax.overflowing_add(1).0,
-            IncB   => cpu.bx = bx.overflowing_add(1).0,
-            DecC   => cpu.cx = cx.overflowing_sub(1).0,
-            IncC   => cpu.cx = cx.overflowing_add(1).0,
+            }
+            SubAb => cpu.cx = ax.overflowing_sub(bx).0,
+            SubAc => cpu.ax = ax.overflowing_sub(cx).0,
+            IncA => cpu.ax = ax.overflowing_add(1).0,
+            IncB => cpu.bx = bx.overflowing_add(1).0,
+            DecC => cpu.cx = cx.overflowing_sub(1).0,
+            IncC => cpu.cx = cx.overflowing_add(1).0,
             PushAx => cpu.push(ax),
             PushBx => cpu.push(bx),
             PushCx => cpu.push(cx),
             PushDx => cpu.push(dx),
-            PopAx  =>
+            PopAx => {
                 match cpu.pop() {
                     Some(v) => cpu.ax = v,
-                    None    => cpu.count_up_fails(),
-                },
-            PopBx  =>
+                    None => cpu.count_up_fails(),
+                }
+            }
+            PopBx => {
                 match cpu.pop() {
                     Some(v) => cpu.bx = v,
-                    None    => cpu.count_up_fails(),
-                },
-            PopCx  =>
+                    None => cpu.count_up_fails(),
+                }
+            }
+            PopCx => {
                 match cpu.pop() {
                     Some(v) => cpu.cx = v,
-                    None    => cpu.count_up_fails(),
-                },
-            PopDx  =>
+                    None => cpu.count_up_fails(),
+                }
+            }
+            PopDx => {
                 match cpu.pop() {
                     Some(v) => cpu.dx = v,
-                    None    => cpu.count_up_fails(),
-                },
+                    None => cpu.count_up_fails(),
+                }
+            }
             Jmp | Jmpb | Call => {
                 if ins == Call {
                     let ip = cpu.ip;
@@ -297,24 +298,22 @@ impl Universe {
                     None               => cpu.count_up_fails(),
                     Some((addr, size)) => cpu.ip = (addr + size - 1) as u16,
                 }
-            },
-            Ret   =>
+            }
+            Ret => {
                 match cpu.pop() {
-                    None => cpu.count_up_fails(),
+                    None    => cpu.count_up_fails(),
                     Some(v) => cpu.ip = v,
-                },
-            MovCd  => cpu.dx = cx,
-            MovAb  => cpu.bx = ax,
+                }
+            }
+            MovCd => cpu.dx = cx,
+            MovAb => cpu.bx = ax,
             MovIab => {
                 let ax = ax as usize;
                 let bx = bx as usize;
 
-                let is_writable = |x, r: &MemoryRegion| {
-                    (r.addr <= x) && (x < r.end_addr())
-                };
+                let is_writable = |x, r: &MemoryRegion| (r.addr <= x) && (x < r.end_addr());
 
-                let is_write =
-                {
+                let is_write = {
                     let d = creature.daughter.as_ref();
                     if d.is_some() && is_writable(ax, &d.unwrap().genome_region) && (bx < self.genome_soup.len()) {
                         true
@@ -328,23 +327,22 @@ impl Universe {
                 if is_write {
                     creature.count_copy += 1;
                     let ins = self.genome_soup[bx as usize];
-                    self.genome_soup[ax as usize] =
-                        if self.is_enable_random_mutate && ((creature.count_copy % creature.mutate_threshold_copy_fail) == 0) {
-                            creature.randomize_mutate_threshold_copy_fail();
-                            ins.mutate_bit_randomly()
-                        } else {
-                            ins
-                        }
+                    self.genome_soup[ax as usize] = if self.is_enable_random_mutate && ((creature.count_copy % creature.mutate_threshold_copy_fail) == 0) {
+                        creature.randomize_mutate_threshold_copy_fail();
+                        ins.mutate_bit_randomly()
+                    } else {
+                        ins
+                    }
                 }
-            },
+            }
             Adr => {
                 let ip = cpu.ip as usize + 1;
                 let f = self.search_complement_addr_forward(ip);
                 let b = self.search_complement_addr_backward(ip);
                 match (f, b) {
-                    (None, None)                                     => cpu.count_up_fails(),
-                    (None, Some((addr, size)))                       => cpu.ax = (addr + size) as u16,
-                    (Some((addr, size)), None)                       => cpu.ax = (addr + size) as u16,
+                    (None, None)               => cpu.count_up_fails(),
+                    (None, Some((addr, size))) => cpu.ax = (addr + size) as u16,
+                    (Some((addr, size)), None) => cpu.ax = (addr + size) as u16,
                     (Some((addr_f, size_f)), Some((addr_b, size_b))) => {
                         // Find the nearest one.
                         cpu.ax =
@@ -353,15 +351,15 @@ impl Universe {
                             } else {
                                 (addr_b + size_b) as u16
                             };
-                    },
+                    }
                 }
-            },
+            }
             Adrf | Adrb => {
                 match self.search_complement_addr(cpu.ip as usize + 1, ins == Adrf) {
                     None               => cpu.count_up_fails(),
                     Some((addr, size)) => cpu.ax = (addr + size) as u16,
                 }
-            },
+            }
             Mal => {
                 match self.allocate_genome_soup(cx as usize) {
                     None                => cpu.count_up_fails(),
@@ -373,13 +371,13 @@ impl Universe {
                         creature.daughter = Some(Box::new(Creature::new(genome_region)));
                     }
                 }
-            },
+            }
             Divide => {
                 if creature.daughter.is_some() {
                     let daughter = creature.daughter.clone();
                     creature.daughter = None;
 
-                    let mut daughter    = *daughter.unwrap();
+                    let mut daughter = *daughter.unwrap();
                     let daughter_genome = self.genome_soup[daughter.genome_region.range()].to_vec();
 
                     {
@@ -433,14 +431,16 @@ impl Universe {
             self.world_clock += 1;
 
             if self.is_enable_random_mutate && ((self.world_clock % self.mutate_threshold_cosmic_rays) == 0) {
-                let target_index = rand::thread_rng().gen_range(0, self.genome_soup.len());
-                self.genome_soup[target_index] = self.genome_soup[target_index].mutate_bit_randomly();
-
                 self.randomize_mutate_threshold_cosmic_rays();
+
+                let target_index = rand::thread_rng().gen_range(0, self.genome_soup.len());
+                let p = &mut self.genome_soup[target_index];
+                *p = p.mutate_bit_randomly();
             }
         }
     }
 
+    #[test]
     fn execute_creature_by_index(&mut self, index: usize, insts_count: usize)
     {
         let mut c = self.creatures[index].clone();
@@ -462,11 +462,11 @@ impl Universe {
         self.creatures = cs;
     }
 
-    pub fn wakeup_reaper_if_genome_usage_over(&mut self, threshold:f64)
+    pub fn wakeup_reaper_if_genome_usage_over(&mut self, threshold: f64)
     {
         while threshold < self.compute_genome_soup_used_rate() {
             match self.creatures.pop() {
-                None         => panic!("!?"),
+                None => panic!("!?"),
                 Some(target) => {
                     self.gene_bank.count_up_dead_genome(target.geno_type.as_ref().unwrap());
 
@@ -475,7 +475,7 @@ impl Universe {
                     }
 
                     self.free_genome_soup(target.genome_region);
-                },
+                }
             }
         }
     }
@@ -624,7 +624,7 @@ mod tests {
     #[test]
     fn test_instruction_nop()
     {
-        let insts = [ Nop0, Nop1, Nop0, Nop1 ];
+        let insts = [Nop0, Nop1, Nop0, Nop1];
         let (mut univ, mut c) = prepare_test_creature(&insts);
 
         univ.execute_creature_by_index(0, 4);
@@ -635,13 +635,7 @@ mod tests {
     #[test]
     fn test_instruction_or1()
     {
-        let insts = [
-            Nop1,
-            Or1,
-            Jmpb,
-            Nop0,
-            Zero,
-        ];
+        let insts = [Nop1, Or1, Jmpb, Nop0, Zero];
         let (mut univ, mut c) = prepare_test_creature(&insts);
 
         univ.execute_creature_by_index(0, 2);
@@ -658,14 +652,7 @@ mod tests {
     #[test]
     fn test_instruction_shl()
     {
-        let insts = [
-            Nop0,
-            Or1,
-            Shl,
-            Jmpb,
-            Nop1,
-            Zero,
-        ];
+        let insts = [Nop0, Or1, Shl, Jmpb, Nop1, Zero];
         let (mut univ, mut c) = prepare_test_creature(&insts);
 
         univ.execute_creature_by_index(0, 4);
@@ -682,15 +669,7 @@ mod tests {
     #[test]
     fn test_instruction_zero()
     {
-        let insts = [
-            Nop1,
-            Or1,
-            Shl,
-            Zero,
-            Jmpb,
-            Nop0,
-            Zero,
-        ];
+        let insts = [Nop1, Or1, Shl, Zero, Jmpb, Nop0, Zero];
         let (mut univ, mut c) = prepare_test_creature(&insts);
 
         univ.execute_creature_by_index(0, 3);
@@ -707,14 +686,7 @@ mod tests {
     #[test]
     fn test_instruction_if_cz()
     {
-        let insts = [
-            Nop1,
-            IfCz,
-            Or1,
-            Jmpb,
-            Nop0,
-            Zero,
-        ];
+        let insts = [Nop1, IfCz, Or1, Jmpb, Nop0, Zero];
         let (mut univ, mut c) = prepare_test_creature(&insts);
 
         univ.execute_creature_by_index(0, 2);
@@ -740,17 +712,7 @@ mod tests {
     #[test]
     fn test_instruction_sub()
     {
-        let insts = [
-            Nop1,
-            IncA,
-            IncA,
-            IncB,
-            SubAb,
-            SubAc,
-            Jmpb,
-            Nop0,
-            Zero,
-        ];
+        let insts = [Nop1, IncA, IncA, IncB, SubAb, SubAc, Jmpb, Nop0, Zero];
         let (mut univ, mut c) = prepare_test_creature(&insts);
 
         univ.execute_creature_by_index(0, 5);
@@ -769,9 +731,7 @@ mod tests {
     #[test]
     fn test_instruction_inc_dec()
     {
-        let insts = [
-            IncA, IncB, IncA, IncB, IncC, IncC, IncC, DecC,
-        ];
+        let insts = [IncA, IncB, IncA, IncB, IncC, IncC, IncC, DecC];
         let (mut univ, mut c) = prepare_test_creature(&insts);
 
         univ.execute_creature_by_index(0, 8);
@@ -789,14 +749,14 @@ mod tests {
         let (mut univ, mut c) = prepare_test_creature(&insts);
 
         univ.execute_creature_by_index(0, insts.len());
-        c.core.ax       = 1;
-        c.core.bx       = 1;
-        c.core.cx       = 1;
+        c.core.ax = 1;
+        c.core.bx = 1;
+        c.core.cx = 1;
         c.core.stack[0] = 1;
         c.core.stack[1] = 1;
         c.core.stack[2] = 1;
         c.core.stack[3] = 0;
-        c.core.sp       = 4;
+        c.core.sp = 4;
         c.core.ip = c.genome_region.size as u16;
         assert_eq!(univ.creatures[0].core, c.core);
     }
@@ -804,7 +764,19 @@ mod tests {
     #[test]
     fn test_instruction_pop()
     {
-        let insts = [IncA, IncB, IncC, PushAx, PushBx, PushCx, PushDx, PopAx, PopBx, PopCx, PopDx];
+        let insts = [
+            IncA,
+            IncB,
+            IncC,
+            PushAx,
+            PushBx,
+            PushCx,
+            PushDx,
+            PopAx,
+            PopBx,
+            PopCx,
+            PopDx,
+        ];
         let (mut univ, mut c) = prepare_test_creature(&insts);
 
         univ.execute_creature_by_index(0, insts.len());
@@ -894,14 +866,7 @@ mod tests {
     #[test]
     fn test_instruction_mov()
     {
-        let insts = [
-            IncC,
-            MovCd,
-            IncA,
-            MovAb,
-            IncA,
-            MovIab,
-        ];
+        let insts = [IncC, MovCd, IncA, MovAb, IncA, MovIab];
         let (mut univ, mut c) = prepare_test_creature(&insts);
 
         univ.execute_creature_by_index(0, 2);
@@ -960,13 +925,7 @@ mod tests {
     #[test]
     fn test_instruction_mal_divide()
     {
-        let insts = [
-            IncC,
-            IncC,
-            IncC,
-            Mal,
-            Divide,
-        ];
+        let insts = [IncC, IncC, IncC, Mal, Divide];
         let (mut univ, mut c) = prepare_test_creature(&insts);
 
         univ.execute_creature_by_index(0, 4);

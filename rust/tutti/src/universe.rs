@@ -9,7 +9,7 @@ use std::collections::VecDeque;
 use std::mem;
 
 
-pub const UNIVERSE_TOTAL_GENOME_CAPACITY: usize = 8 * 1024;
+pub const UNIVERSE_TOTAL_GENOME_CAPACITY: usize = 2 * 1024;
 
 pub struct Universe {
     genome_soup: [Instruction; UNIVERSE_TOTAL_GENOME_CAPACITY],
@@ -133,9 +133,22 @@ impl Universe {
         self.free_regions.sort();
     }
 
-    fn compute_genome_soup_free_size(&self) -> usize
+    pub fn compute_genome_soup_free_size(&self) -> usize
     {
         self.free_regions.iter().fold(0, |acc, ref x| acc + x.size)
+    }
+
+    pub fn compute_genome_soup_used_size(&self) -> usize
+    {
+        self.creatures
+            .iter()
+            .fold(0, |acc, ref x| {
+                acc + x.genome_region.size +
+                    match x.daughter {
+                        None        => 0,
+                        Some(ref d) => d.genome_region.size,
+                    }
+            })
     }
 
     pub fn compute_genome_soup_free_rate(&self) -> f64
@@ -160,6 +173,7 @@ impl Universe {
     {
         self.extract_argument_template(addr)
             .map(|template| {
+                debug_assert!(template.len() != 0);
                 template
                     .clone()
                     .into_iter()
@@ -210,11 +224,16 @@ impl Universe {
         // the addr have to be the beginning of the template you want to extract.
         // debug_assert_eq!(Instruction::is_nop(self.genome_soup[addr]), true);
 
-        if Instruction::is_nop(self.genome_soup[addr]) == false {
+        if (self.genome_soup.len() <= addr) || (Instruction::is_nop(self.genome_soup[addr]) == false) {
             return None;
         }
 
         let target_region = &self.genome_soup[addr..(self.genome_soup.len() - 1)];
+
+        if target_region.len() == 0 {
+            return None;
+        }
+
         target_region
             .iter()
             .position(|&x| Instruction::is_nop(x) == false)
@@ -349,6 +368,9 @@ impl Universe {
                         None => {},
                         Some(genome_region) => {
                             cpu.ax = genome_region.addr as u16;
+                            if let Some(ref mut daughter) = creature.daughter {
+                                self.free_genome_soup(daughter.genome_region);
+                            }
                             creature.daughter = Some(Box::new(Creature::new(genome_region)));
                         }
                     }

@@ -49,7 +49,11 @@ impl fmt::Display for GeneBank {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let mut keys = HashSet::new();
         for i in self.records.iter() {
-            keys.insert(i.to_string());
+            let key = i.to_string();
+            match self.alive_count_map.get(&key) {
+                Some(c) if *c != 0 => { keys.insert(key); },
+                _                  => { },
+            }
         }
 
         let mut v = Vec::new();
@@ -60,7 +64,6 @@ impl fmt::Display for GeneBank {
             .iter()
             .map(|key| {
                 let key = key.to_string();
-                let r = self.find_genome_record_by_type(Some(&key)).unwrap();
                 let default_value = 0;
                 let alive_count   = self.alive_count_map.get(&key).unwrap_or(&default_value);
                 let dead_count    = self.dead_count_map.get(&key).unwrap_or(&default_value);
@@ -69,7 +72,6 @@ impl fmt::Display for GeneBank {
                     format!("  # of borns : {:>}", alive_count + dead_count),
                     format!("  # of alives: {:>}", alive_count),
                     format!("  # of deads : {:>}", dead_count),
-                    format!("  Genome     : {:?}",   r.genome),
                 ].join("\n")
             })
             .collect::<Vec<String>>()
@@ -151,5 +153,37 @@ impl GeneBank {
             let count = m.remove(&key).unwrap();
             m.insert(key, count - 1);
         }
+    }
+
+    pub fn dump_all_recorded_genoms(&self) -> String
+    {
+        let mut keys =
+            self.records
+            .iter()
+            .fold(HashSet::new(), |mut acc, ref x| {
+                acc.insert(x.to_string());
+                acc
+            })
+            .into_iter()
+            .collect::<Vec<String>>();
+        keys.sort();
+
+        keys
+            .into_iter()
+            .map(|key| {
+                let r = self.find_genome_record_by_type(Some(&key)).unwrap();
+                let default_value = 0;
+                let alive_count   = self.alive_count_map.get(&key).unwrap_or(&default_value);
+                let dead_count    = self.dead_count_map.get(&key).unwrap_or(&default_value);
+                [
+                    format!("GenoType: {}", key),
+                    format!("  # of borns : {:>}", alive_count + dead_count),
+                    format!("  # of alives: {:>}", alive_count),
+                    format!("  # of deads : {:>}", dead_count),
+                    format!("  Genome     : [{}]", r.genome.iter().map(|&x| format!("{:?}", x)).collect::<Vec<String>>().join(", ")),
+                ].join("\n")
+            })
+            .collect::<Vec<String>>()
+            .join("\n")
     }
 }

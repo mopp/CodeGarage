@@ -5,3 +5,6 @@ authors = ["mopp"]
 
 [dependencies]
 rand = "0.3"
+chan = "*"
+chan-signal = "*"
+chrono = "0.4.0"

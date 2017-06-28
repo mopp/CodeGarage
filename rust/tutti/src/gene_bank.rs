@@ -58,9 +58,9 @@ impl fmt::Display for GeneBank {
 
         let s = v
             .iter()
-            .zip(self.records.iter())
-            .map(|(key, r)| {
+            .map(|key| {
                 let key = key.to_string();
+                let r = self.find_genome_record_by_type(Some(&key)).unwrap();
                 let default_value = 0;
                 let alive_count   = self.alive_count_map.get(&key).unwrap_or(&default_value);
                 let dead_count    = self.dead_count_map.get(&key).unwrap_or(&default_value);

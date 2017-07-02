@@ -1,7 +1,9 @@
-#include <stddef.h>
-#include <stdio.h>
 #include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
+#include <assert.h>
 
 struct block {
     uintptr_t addr;
@@ -18,6 +20,31 @@ struct block_strage {
     Block blocks[BLOCK_COUNT];
 };
 typedef struct block_strage BlockStrage;
+
+
+
+static BlockStrage* block_strage_create();
+static void block_strage_destroy(BlockStrage*);
+static size_t block_strage_free_size(BlockStrage const*);
+static void block_strage_dump(char const*, BlockStrage const*);
+static void* alloc_firstfit(BlockStrage*, size_t);
+
+
+int main(void)
+{
+    BlockStrage* bs_first_fit = block_strage_create();
+    /* BlockStrage* next_fit = block_strage_create(); */
+
+    alloc_firstfit(bs_first_fit, 100);
+    alloc_firstfit(bs_first_fit, 100);
+    block_strage_dump("FirstFit", bs_first_fit);
+    assert(block_strage_free_size(bs_first_fit) == (TOTAL_MEMORY_SIZE_BYTE - BLOCK_MEMORY_UNIT_SIZE_BYTE * 2));
+
+    block_strage_destroy(bs_first_fit);
+
+    return 0;
+}
+
 
 static BlockStrage* block_strage_create()
 {
@@ -36,13 +63,13 @@ static BlockStrage* block_strage_create()
 }
 
 
-void block_strage_destroy(BlockStrage* bs)
+static void block_strage_destroy(BlockStrage* bs)
 {
     free((void*)bs->blocks[0].addr);
     free(bs);
 }
 
-size_t block_strage_free_size(BlockStrage const* bs)
+static size_t block_strage_free_size(BlockStrage const* bs)
 {
     size_t sum = 0;
     for (size_t i = 0; i < BLOCK_COUNT; i++) {
@@ -57,7 +84,7 @@ size_t block_strage_free_size(BlockStrage const* bs)
 }
 
 
-void block_strage_dump(char const* tag, BlockStrage const* bs)
+static void block_strage_dump(char const* tag, BlockStrage const* bs)
 {
     printf("%s\n", tag);
     printf("  Free size: %zd byte\n", block_strage_free_size(bs));
@@ -65,7 +92,7 @@ void block_strage_dump(char const* tag, BlockStrage const* bs)
 }
 
 
-void* alloc_firstfit(BlockStrage* bs, size_t size)
+static void* alloc_firstfit(BlockStrage* bs, size_t size)
 {
     for (size_t i = 0; i < BLOCK_COUNT; i++) {
         Block* b = &bs->blocks[i];
@@ -78,16 +105,4 @@ void* alloc_firstfit(BlockStrage* bs, size_t size)
     }
 
     return NULL;
-}
-
-
-int main(void)
-{
-    BlockStrage* bs_first_fit = block_strage_create();
-    alloc_firstfit(bs_first_fit, 100);
-    block_strage_dump("FirstFit", bs_first_fit);
-    /* BlockStrage* next_fit = block_strage_create(); */
-    alloc_firstfit(bs_first_fit, 100);
-
-    return 0;
 }

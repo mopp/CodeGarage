@@ -1,0 +1,7 @@
+[package]
+name = "rsgrep"
+version = "0.1.0"
+authors = ["mopp <hello@mopp.jp>"]
+
+[dependencies]
+regex = "0.2.1"

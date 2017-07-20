@@ -16,17 +16,16 @@ fn main() {
 fn grep() -> Result<(), String> {
     static USAGE_MESSAGE: &'static str = "rsgrep PATTERN FILENAM";
 
-    let pattern  = try!(env::args().nth(1).ok_or(USAGE_MESSAGE.to_string()));
-    let filename = try!(env::args().nth(2).ok_or(USAGE_MESSAGE.to_string()));
-    let reg      = try!(Regex::new(&pattern).map_err(|e| e.to_string()));
-    let input    = try!(
+    let pattern  = env::args().nth(1).ok_or(USAGE_MESSAGE.to_string())?;
+    let filename = env::args().nth(2).ok_or(USAGE_MESSAGE.to_string())?;
+    let reg      = Regex::new(&pattern).map_err(|e| e.to_string())?;
+    let input    =
         File::open(&filename)
         .map(|f| BufReader::new(f))
-        .map_err(|e| e.to_string())
-        );
+        .map_err(|e| e.to_string())?;
 
     for line in input.lines() {
-        let line = try!(line.map_err(|e| e.to_string()));
+        let line = line.map_err(|e| e.to_string())?;
 
         if reg.is_match(&line) {
             println!("{}", line);

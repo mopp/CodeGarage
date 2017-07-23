@@ -1,3 +1,5 @@
+mod parser;
+
 use std::net::TcpListener;
 use std::thread;
 use std::io::{Read, Write};
@@ -18,15 +20,30 @@ fn server_start() -> io::Result<()> {
 
         let _ = thread::spawn(
             move || -> io::Result<()> {
+                use parser::ParseResult::*;
+                let mut buf = Vec::new();
                 loop {
-                    let mut buffer = [0; 1024];
-                    let count = stream.read(&mut buffer)?;
-                    if count == 0 {
+                    let mut b = [0; 1024];
+                    let n = stream.read(&mut b)?;
+
+                    if n == 0 {
                         return Ok(());
-                    } else {
-                        stream.write(&buffer[0..count])?;
                     }
-                }});
+
+                    buf.extend_from_slice(&b[0..n]);
+                    match parser::parse(buf.as_slice()) {
+                        Partial => continue,
+                        Error => {
+                            return Ok(());
+                        },
+                        Complete(req) => {
+                            write!(stream, "OK {}\r\n", req.0)?;
+                            return Ok(());
+                        },
+                    };
+                }
+            }
+        );
     }
 
     Ok(())

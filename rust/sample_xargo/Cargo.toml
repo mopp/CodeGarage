@@ -1,0 +1,9 @@
+[package]
+name = "sample_xargo"
+version = "0.1.0"
+authors = ["mopp <hello@mopp.jp>"]
+
+[lib]
+crate-type = ["staticlib"]
+
+[dependencies]

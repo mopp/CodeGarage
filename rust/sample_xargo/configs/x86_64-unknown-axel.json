@@ -7,7 +7,7 @@
   "env": "",
   "executables": true,
   "has-elf-tls": true,
-  "is-builtin": true,
+  "is-builtin": false,
   "linker-flavor": "gcc",
   "linker-is-gnu": true,
   "llvm-target": "x86_64-unknown-axel",

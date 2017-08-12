@@ -101,7 +101,7 @@ impl<T> List<T> {
             }
         }
 
-        let mut last_ptr_node = find_last_node(&mut self.head);
+        let last_ptr_node = find_last_node(&mut self.head);
         *last_ptr_node = Some(unsafe {Unique::new_unchecked(ptr)});
     }
 
@@ -141,7 +141,7 @@ impl<T> List<T> {
         match *find_prev_last_node(&mut self.head, cnt) {
             None => None,
             Some(uniq)  => unsafe {
-                let mut next_node = uniq.as_ptr();
+                let next_node = uniq.as_ptr();
                 let r = (*next_node).next;
                 (*next_node).next = None;
                 Some(r.unwrap().as_ptr())
@@ -170,37 +170,99 @@ mod tests {
     use std::heap::{Alloc, System, Layout};
     use std::slice;
 
-    fn allocate_objs_for_test<'a>(count: usize) -> &'a mut [PtrNode<MemoryRegion>]
+    fn allocate_node_objs_for_test<'a, T>(count: usize) -> &'a mut [PtrNode<T>]
     {
-        let layout = Layout::from_size_align(count * mem::size_of::<MemoryRegion>(), mem::align_of::<MemoryRegion>()).unwrap();
-        let ptr = unsafe { System.alloc(layout) }.unwrap();
-        let mut regions: &mut [MemoryRegion] = unsafe {slice::from_raw_parts_mut(ptr as *mut MemoryRegion, count)};
+        let type_size = mem::size_of::<T>();
+        let align     = mem::align_of::<T>();
+        let layout    = Layout::from_size_align(count * type_size, align).unwrap();
+        let ptr       = unsafe { System.alloc(layout) }.unwrap();
+        let objs      = unsafe { slice::from_raw_parts_mut(ptr as *mut T, count) };
 
-        let mut addr = 0x0000;
-        for u in &mut regions[0..] {
-            let r = MemoryRegion(addr, true);
-            unsafe { ptr::write(u, r) ;}
-            addr += 0x1000;
-        }
+        let type_size = mem::size_of::<PtrNode<T>>();
+        let align     = mem::align_of::<PtrNode<T>>();
+        let layout    = Layout::from_size_align(count * type_size, align).unwrap();
+        let ptr       = unsafe { System.alloc(layout) }.unwrap();
+        let nodes     = unsafe { slice::from_raw_parts_mut(ptr as *mut PtrNode<_>, count) };
 
-        let layout = Layout::from_size_align(count * mem::size_of::<PtrNode<MemoryRegion>>(), mem::align_of::<PtrNode<MemoryRegion>>()).unwrap();
-        let ptr = unsafe { System.alloc(layout) }.unwrap();
-        let mut memory_regions_source = unsafe {slice::from_raw_parts_mut(ptr as *mut PtrNode<MemoryRegion>, count)};
         for i in 0..count {
-            let u = &mut memory_regions_source[i];
-            let n = PtrNode::new(&mut regions[i] as *mut _);
-            unsafe {ptr::write(u, n)};
+            let n = PtrNode::new(&mut objs[i] as *mut _);
+            unsafe { ptr::write(&mut nodes[i], n) };
         }
 
-        memory_regions_source
+        nodes
     }
 
+    struct Frame {
+        order: u8,
+        is_free: bool,
+    }
+
+    const MAX_ORDER: usize = 14 + 1;
+
+    struct BuddyManager {
+        frames: *mut PtrNode<Frame>,
+        base_addr: usize,
+        count_all_frames: usize,
+        count_free_frames_in_group: [usize; MAX_ORDER],
+        frame_group_lists: [List<Frame>; MAX_ORDER]
+    }
+
+    impl BuddyManager {
+        fn new(frames: *mut PtrNode<Frame>, count_all_frames: usize) -> BuddyManager {
+            let mut bman =
+                BuddyManager {
+                    frames: frames,
+                    base_addr: 0,
+                    count_all_frames: count_all_frames,
+                    count_free_frames_in_group: [0; MAX_ORDER],
+                    frame_group_lists: [List::new(), List::new(), List::new(), List::new(), List::new(), List::new(), List::new(), List::new(), List::new(), List::new(), List::new(), List::new(), List::new(), List::new(), List::new()],
+                };
+
+            // Init all frames.
+            let slice = unsafe { slice::from_raw_parts_mut(frames as *mut PtrNode<Frame>, count_all_frames) };
+
+            let mut idx = 0;
+            let mut count_rest_frames = count_all_frames;
+            for order in (0..MAX_ORDER).rev() {
+                let list = &mut bman.frame_group_lists[order];
+                let count_frames_in_group = 1 << order;
+
+                let mut count_frame_blocks = 0;
+                loop {
+                    if count_rest_frames < count_frames_in_group {
+                        break;
+                    }
+
+                    for f in slice[idx..(idx + count_frames_in_group)].iter_mut() {
+                        list.push_back(f);
+                    }
+
+                    count_frame_blocks += 1;
+                    idx                += count_rest_frames;
+                    count_rest_frames  -= count_frames_in_group;
+                }
+                bman.count_free_frames_in_group[order] = count_frame_blocks;
+            }
+
+            bman
+        }
+    }
+
+    #[test]
+    fn test_usage()
+    {
+        const SIZE: usize = 1024;
+        let frames = allocate_node_objs_for_test::<Frame>(SIZE);
+        let bman   = BuddyManager::new(&mut frames[0] as *mut _, SIZE);
+
+        assert_eq!(bman.count_free_frames_in_group[10], 1);
+    }
 
     #[test]
     fn test_len()
     {
         let mut list = List::new();
-        let memory_regions_source = allocate_objs_for_test(1024);
+        let memory_regions_source = allocate_node_objs_for_test::<MemoryRegion>(1024);
 
         let mut cnt = 0;
         for m in memory_regions_source.as_mut() {
@@ -218,7 +280,7 @@ mod tests {
     fn test_push_front()
     {
         let mut list = List::new();
-        let memory_regions_source = allocate_objs_for_test(1024);
+        let memory_regions_source = allocate_node_objs_for_test::<MemoryRegion>(1024);
 
         for m in memory_regions_source.as_mut() {
             list.push_front(m);
@@ -230,7 +292,7 @@ mod tests {
     fn test_push_back()
     {
         let mut list = List::new();
-        let memory_regions_source = allocate_objs_for_test(1024);
+        let memory_regions_source = allocate_node_objs_for_test::<MemoryRegion>(1024);
 
         for m in memory_regions_source.as_mut() {
             list.push_back(m);
@@ -243,7 +305,7 @@ mod tests {
     fn test_pop_back()
     {
         let mut list = List::new();
-        let memory_regions_source = allocate_objs_for_test(1024);
+        let memory_regions_source = allocate_node_objs_for_test::<MemoryRegion>(1024);
 
         for m in memory_regions_source.as_mut() {
             list.push_front(m);

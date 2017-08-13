@@ -1,6 +1,6 @@
 #![feature(unique)]
 #![feature(nonzero)]
-#![feature(allocator_api, heap_api)]
+#![feature(allocator_api)]
 
 use std::mem;
 use std::ptr::Unique;
@@ -261,21 +261,20 @@ mod tests {
         fn alloc(&mut self, request_order: usize) -> Option<*mut PtrNode<Frame>>
         {
             for order in request_order..MAX_ORDER {
-                if self.frame_group_lists[order].is_empty() {
-                    continue;
+                let list = &mut self.frame_group_lists[order];
+
+                match list.pop_front() {
+                    None                => continue,
+                    Some(allocate_node) => {
+                        self.count_free_frames_in_group[order] -= 1;
+                        {
+                            let f     = unsafe{(*allocate_node).as_mut()};
+                            f.order   = request_order as u8;
+                            f.is_free = false;
+                        }
+                        // If the frame has larger order than the requested order, remain frames of the frame should be inserted into other frame lists.
+                    }
                 }
-
-                // Found an enough frame and detach the frame.
-                let allocate_node = self.frame_group_lists[order].pop_front().unwrap();
-                self.count_free_frames_in_group[order] -= 1;
-
-                {
-                    let f = allocate_node.as_mut();
-                    f.order = request_order;
-                    f.is_free = false;
-                }
-
-                // If the frame that has larger order than requested order, remain frames of the frame should be inserted into other frame lists.
             }
 
             None
@@ -306,6 +305,8 @@ mod tests {
         let mut list = List::new();
         let memory_regions_source = allocate_node_objs_for_test::<MemoryRegion>(1024);
 
+        assert_eq!(list.is_empty(), true);
+
         let mut cnt = 0;
         for m in memory_regions_source.as_mut() {
             assert_eq!(list.len(), cnt);
@@ -316,6 +317,7 @@ mod tests {
         }
 
         assert_eq!(list.len(), 1024);
+        assert_eq!(list.is_empty(), false);
     }
 
     #[test]

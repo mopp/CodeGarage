@@ -160,6 +160,11 @@ impl<T> List<T> {
         }
         count(&self.head, 0)
     }
+
+    fn is_empty(&self) -> bool
+    {
+        self.len() == 0
+    }
 }
 
 
@@ -208,7 +213,8 @@ mod tests {
     }
 
     impl BuddyManager {
-        fn new(frames: *mut PtrNode<Frame>, count_all_frames: usize) -> BuddyManager {
+        fn new(frames: *mut PtrNode<Frame>, count_all_frames: usize) -> BuddyManager
+        {
             let mut bman =
                 BuddyManager {
                     frames: frames,
@@ -224,21 +230,26 @@ mod tests {
             let mut idx = 0;
             let mut count_rest_frames = count_all_frames;
             for order in (0..MAX_ORDER).rev() {
+                if count_rest_frames == 0 {
+                    break;
+                }
+
                 let list = &mut bman.frame_group_lists[order];
                 let count_frames_in_group = 1 << order;
 
                 let mut count_frame_blocks = 0;
-                loop {
-                    if count_rest_frames < count_frames_in_group {
-                        break;
-                    }
-
-                    for f in slice[idx..(idx + count_frames_in_group)].iter_mut() {
-                        list.push_back(f);
+                while count_frames_in_group <= count_rest_frames{
+                    for node in slice[idx..(idx + count_frames_in_group)].iter_mut() {
+                        {
+                            let f = node.as_mut();
+                            f.order = order as u8;
+                            f.is_free = true;
+                        }
+                        list.push_back(node);
                     }
 
                     count_frame_blocks += 1;
-                    idx                += count_rest_frames;
+                    idx                += count_frames_in_group;
                     count_rest_frames  -= count_frames_in_group;
                 }
                 bman.count_free_frames_in_group[order] = count_frame_blocks;
@@ -246,16 +257,47 @@ mod tests {
 
             bman
         }
+
+        fn alloc(&mut self, request_order: usize) -> Option<*mut PtrNode<Frame>>
+        {
+            for order in request_order..MAX_ORDER {
+                if self.frame_group_lists[order].is_empty() {
+                    continue;
+                }
+
+                // Found an enough frame and detach the frame.
+                let allocate_node = self.frame_group_lists[order].pop_front().unwrap();
+                self.count_free_frames_in_group[order] -= 1;
+
+                {
+                    let f = allocate_node.as_mut();
+                    f.order = request_order;
+                    f.is_free = false;
+                }
+
+                // If the frame that has larger order than requested order, remain frames of the frame should be inserted into other frame lists.
+            }
+
+            None
+        }
     }
 
     #[test]
     fn test_usage()
     {
-        const SIZE: usize = 1024;
+        const SIZE: usize = 1 + 1024;
         let frames = allocate_node_objs_for_test::<Frame>(SIZE);
-        let bman   = BuddyManager::new(&mut frames[0] as *mut _, SIZE);
+        let mut bman = BuddyManager::new(&mut frames[0] as *mut _, SIZE);
 
-        assert_eq!(bman.count_free_frames_in_group[10], 1);
+        for i in 0..MAX_ORDER {
+            let cnt = bman.count_free_frames_in_group[i];
+            match i {
+                0 | 10 => assert_eq!(cnt, 1),
+                _  => assert_eq!(cnt, 0),
+            }
+        }
+
+        let n = bman.alloc(0);
     }
 
     #[test]

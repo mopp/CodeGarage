@@ -60,8 +60,24 @@ impl<T> LinkedList<T> {
         }
     }
 
-    fn push_front(&mut self, element: *mut T)
+    fn push_front(&mut self, new_node: *mut Node<T>)
     {
+        let mut new_shared_node = unsafe { Shared::new_unchecked(new_node) };
+
+        {
+            let n = unsafe { new_shared_node.as_mut() };
+            n.next = self.head;
+            n.prev = None;
+        }
+
+        let new_shared_node = Some(new_shared_node);
+        match self.head {
+            None           => self.tail = new_shared_node,
+            Some(mut head) => unsafe { head.as_mut().prev = new_shared_node },
+        }
+
+        self.head = new_shared_node;
+        self.length += 1;
     }
 }
 
@@ -85,9 +101,10 @@ mod tests {
     #[test]
     fn test_push_front()
     {
-        let objs = allocate_unique_objs::<usize>(1024);
+        let objs = allocate_unique_objs::<Node<usize>>(1024);
 
         let mut list = LinkedList::new();
-        list.push_front(&mut objs[0] as *mut _)
+        list.push_front(&mut objs[0] as *mut _);
+        // list.push_front(&mut objs[0] as *mut _);
     }
 }

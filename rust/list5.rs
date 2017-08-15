@@ -2,27 +2,39 @@
 #![feature(unique)]
 #![feature(allocator_api)]
 
+use std::default::Default;
 use std::ptr::Shared;
 use std::ptr::Unique;
 use std::mem;
 use std::ptr;
 
 
-struct LinkedList<T> {
+struct LinkedList<T: Default> {
     head: Option<Shared<Node<T>>>,
     tail: Option<Shared<Node<T>>>,
     length: usize,
 }
 
 
-struct Node<T> {
+struct Node<T: Default> {
     next: Option<Shared<Node<T>>>,
     prev: Option<Shared<Node<T>>>,
     element: T,
 }
 
+impl<T: Default> Default for Node<T> {
+    fn default() -> Node<T>
+    {
+        Node {
+            next: None,
+            prev: None,
+            element: Default::default(),
+        }
+    }
+}
 
-impl<T> LinkedList<T> {
+
+impl<T: Default> LinkedList<T> {
     fn new() -> LinkedList<T>
     {
         LinkedList {
@@ -30,6 +42,11 @@ impl<T> LinkedList<T> {
             tail: None,
             length: 0
         }
+    }
+
+    fn len(&self) -> usize
+    {
+        self.length
     }
 
     fn front(&self) -> Option<&T>
@@ -79,6 +96,26 @@ impl<T> LinkedList<T> {
         self.head = new_shared_node;
         self.length += 1;
     }
+
+    fn push_back(&mut self, new_node: *mut Node<T>)
+    {
+        let mut new_shared_node = unsafe { Shared::new_unchecked(new_node) };
+
+        {
+            let n = unsafe { new_shared_node.as_mut() };
+            n.next = None;
+            n.prev = self.tail;
+        }
+
+        let new_shared_node = Some(new_shared_node);
+        match self.tail {
+            None  => self.head = new_shared_node,
+            Some(mut tail) => unsafe {tail.as_mut().next = new_shared_node},
+        }
+
+        self.tail = new_shared_node;
+        self.length += 1;
+    }
 }
 
 
@@ -89,7 +126,7 @@ mod tests {
     use std::heap::{Alloc, System, Layout};
     use std::slice;
 
-    fn allocate_unique_objs<'a, T>(count: usize) -> &'a mut [T]
+    fn allocate_unique_objs<'a, T>(count: usize) -> &'a mut [T] where T: Default
     {
         let type_size = mem::size_of::<T>();
         let align     = mem::align_of::<T>();
@@ -105,6 +142,11 @@ mod tests {
 
         let mut list = LinkedList::new();
         list.push_front(&mut objs[0] as *mut _);
-        // list.push_front(&mut objs[0] as *mut _);
+        assert_eq!(list.length, 1);
+        assert_eq!(list.back(), Some(&0usize));
+
+        list.push_back(&mut objs[1] as *mut _);
+        assert_eq!(list.length, 2);
+        assert_eq!(list.back(), Some(&0usize));
     }
 }

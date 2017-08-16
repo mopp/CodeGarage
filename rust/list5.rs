@@ -12,7 +12,6 @@ use std::ptr;
 struct LinkedList<T: Default> {
     head: Option<Shared<Node<T>>>,
     tail: Option<Shared<Node<T>>>,
-    length: usize,
 }
 
 
@@ -40,13 +39,29 @@ impl<T: Default> LinkedList<T> {
         LinkedList {
             head: None,
             tail: None,
-            length: 0
         }
     }
 
     fn len(&self) -> usize
     {
-        self.length
+        let mut node =
+            if let Some(ref head) = self.head {
+                unsafe { head.as_ref() }
+            } else  {
+                return 0;
+            };
+
+        let mut cnt = 1;
+        loop {
+            match node.next {
+                None => break,
+                Some(ref next) => {
+                    node = unsafe {next.as_ref()};
+                    cnt += 1;
+                }
+            }
+        }
+        cnt
     }
 
     fn front(&self) -> Option<&T>
@@ -94,7 +109,6 @@ impl<T: Default> LinkedList<T> {
         }
 
         self.head = new_shared_node;
-        self.length += 1;
     }
 
     fn push_back(&mut self, new_node: *mut Node<T>)
@@ -114,7 +128,6 @@ impl<T: Default> LinkedList<T> {
         }
 
         self.tail = new_shared_node;
-        self.length += 1;
     }
 }
 
@@ -142,11 +155,11 @@ mod tests {
 
         let mut list = LinkedList::new();
         list.push_front(&mut objs[0] as *mut _);
-        assert_eq!(list.length, 1);
+        assert_eq!(list.len(), 1);
         assert_eq!(list.back(), Some(&0usize));
 
         list.push_back(&mut objs[1] as *mut _);
-        assert_eq!(list.length, 2);
+        assert_eq!(list.len(), 2);
         assert_eq!(list.back(), Some(&0usize));
     }
 }

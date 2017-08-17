@@ -6,7 +6,6 @@ use std::default::Default;
 use std::ptr::Shared;
 use std::ptr::Unique;
 use std::mem;
-use std::ptr;
 
 
 struct LinkedList<T: Default> {
@@ -129,6 +128,23 @@ impl<T: Default> LinkedList<T> {
 
         self.tail = new_shared_node;
     }
+
+    fn pop_back(&mut self) -> Option<*mut Node<T>>
+    {
+        match self.tail {
+            None       => None,
+            Some(tail) => {
+                self.tail = unsafe { tail.as_ref().prev };
+
+                match self.tail {
+                    None               => self.head = None,
+                    Some(mut new_tail) => unsafe { new_tail.as_mut().next = None },
+                }
+
+                Some(tail.as_ptr())
+            }
+        }
+    }
 }
 
 
@@ -161,5 +177,8 @@ mod tests {
         list.push_back(&mut objs[1] as *mut _);
         assert_eq!(list.len(), 2);
         assert_eq!(list.back(), Some(&0usize));
+
+        assert_eq!(Some(&mut objs[1] as *mut _), list.pop_back());
+        assert_eq!(list.len(), 1);
     }
 }

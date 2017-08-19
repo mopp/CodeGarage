@@ -173,12 +173,19 @@ mod tests {
         list.push_front(&mut objs[0] as *mut _);
         assert_eq!(list.len(), 1);
         assert_eq!(list.back(), Some(&0usize));
-
-        list.push_back(&mut objs[1] as *mut _);
-        assert_eq!(list.len(), 2);
-        assert_eq!(list.back(), Some(&0usize));
-
-        assert_eq!(Some(&mut objs[1] as *mut _), list.pop_back());
-        assert_eq!(list.len(), 1);
+        assert_eq!(list.front(), Some(&0usize));
     }
+
+    #[test]
+    fn test_push_back()
+    {
+        let objs = allocate_unique_objs::<Node<usize>>(1024);
+
+        let mut list = LinkedList::new();
+        list.push_back(&mut objs[1] as *mut _);
+        assert_eq!(list.len(), 1);
+        assert_eq!(list.back(), Some(&0usize));
+        assert_eq!(list.front(), Some(&0usize));
+    }
+
 }

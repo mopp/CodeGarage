@@ -129,6 +129,23 @@ impl<T: Default> LinkedList<T> {
         self.tail = new_shared_node;
     }
 
+    fn pop_front(&mut self) -> Option<*mut Node<T>>
+    {
+        match self.head {
+            None       => None,
+            Some(head) => {
+                self.head = unsafe { head.as_ref().next };
+
+                match self.head {
+                    None               => self.tail = None,
+                    Some(mut new_head) => unsafe { new_head.as_mut().prev = None },
+                }
+
+                Some(head.as_ptr())
+            }
+        }
+    }
+
     fn pop_back(&mut self) -> Option<*mut Node<T>>
     {
         match self.tail {
@@ -186,6 +203,28 @@ mod tests {
         assert_eq!(list.len(), 1);
         assert_eq!(list.back(), Some(&0usize));
         assert_eq!(list.front(), Some(&0usize));
+    }
+
+    #[test]
+    fn test_pop_front()
+    {
+        let mut objs = allocate_unique_objs::<Node<usize>>(128);
+
+        let mut list = LinkedList::new();
+        for (i, o) in objs.iter_mut().enumerate() {
+            o.element = i;
+
+            list.push_front(o);
+        }
+
+        assert_eq!(list.len(), objs.len());
+        assert_eq!(list.back(), Some(&0usize));
+        assert_eq!(list.front(), Some(&(objs.len() - 1)));
+
+        for i in (0..objs.len()).rev() {
+            let n = list.pop_front();
+            assert_eq!(i, unsafe {(*n.unwrap()).element});
+        }
     }
 
 }

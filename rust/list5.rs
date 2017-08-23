@@ -1,16 +1,16 @@
 #![feature(shared)]
-#![feature(unique)]
 #![feature(allocator_api)]
 
 use std::default::Default;
 use std::ptr::Shared;
-use std::ptr::Unique;
 use std::mem;
 
 
+/// LinkedList struct.
 struct LinkedList<T: Default> {
-    head: Option<Shared<Node<T>>>,
-    tail: Option<Shared<Node<T>>>,
+    // There two fields are just dummy node to implement Node::detach easily.
+    head: Node<T>,
+    tail: Node<T>,
 }
 
 
@@ -19,6 +19,7 @@ struct Node<T: Default> {
     prev: Option<Shared<Node<T>>>,
     element: T,
 }
+
 
 impl<T: Default> Default for Node<T> {
     fn default() -> Node<T>
@@ -36,15 +37,15 @@ impl<T: Default> LinkedList<T> {
     fn new() -> LinkedList<T>
     {
         LinkedList {
-            head: None,
-            tail: None,
+            head: Default::default(),
+            tail: Default::default(),
         }
     }
 
     fn len(&self) -> usize
     {
         let mut node =
-            if let Some(ref head) = self.head {
+            if let Some(ref head) = self.head.next {
                 unsafe { head.as_ref() }
             } else  {
                 return 0;
@@ -66,28 +67,28 @@ impl<T: Default> LinkedList<T> {
     fn front(&self) -> Option<&T>
     {
         unsafe {
-            self.head.as_ref().map(|node| &node.as_ref().element)
+            self.head.next.as_ref().map(|node| &node.as_ref().element)
         }
     }
 
     fn front_mut(&mut self) -> Option<&mut T>
     {
         unsafe {
-            self.head.as_mut().map(|node| &mut node.as_mut().element)
+            self.head.next.as_mut().map(|node| &mut node.as_mut().element)
         }
     }
 
     fn back(&self) -> Option<&T>
     {
         unsafe {
-            self.tail.as_ref().map(|node| &node.as_ref().element)
+            self.tail.prev.as_ref().map(|node| &node.as_ref().element)
         }
     }
 
     fn back_mut(&mut self) -> Option<&mut T>
     {
         unsafe {
-            self.tail.as_mut().map(|node| &mut node.as_mut().element)
+            self.tail.prev.as_mut().map(|node| &mut node.as_mut().element)
         }
     }
 
@@ -97,17 +98,17 @@ impl<T: Default> LinkedList<T> {
 
         {
             let n = unsafe { new_shared_node.as_mut() };
-            n.next = self.head;
+            n.next = self.head.next;
             n.prev = None;
         }
 
         let new_shared_node = Some(new_shared_node);
-        match self.head {
-            None           => self.tail = new_shared_node,
+        match self.head.next {
+            None           => self.tail.prev = new_shared_node,
             Some(mut head) => unsafe { head.as_mut().prev = new_shared_node },
         }
 
-        self.head = new_shared_node;
+        self.head.next = new_shared_node;
     }
 
     fn push_back(&mut self, new_node: *mut Node<T>)
@@ -117,27 +118,27 @@ impl<T: Default> LinkedList<T> {
         {
             let n = unsafe { new_shared_node.as_mut() };
             n.next = None;
-            n.prev = self.tail;
+            n.prev = self.tail.prev;
         }
 
         let new_shared_node = Some(new_shared_node);
-        match self.tail {
-            None  => self.head = new_shared_node,
+        match self.tail.prev {
+            None  => self.head.next = new_shared_node,
             Some(mut tail) => unsafe {tail.as_mut().next = new_shared_node},
         }
 
-        self.tail = new_shared_node;
+        self.tail.prev = new_shared_node;
     }
 
     fn pop_front(&mut self) -> Option<*mut Node<T>>
     {
-        match self.head {
+        match self.head.next {
             None       => None,
             Some(head) => {
-                self.head = unsafe { head.as_ref().next };
+                self.head.next = unsafe { head.as_ref().next };
 
-                match self.head {
-                    None               => self.tail = None,
+                match self.head.next {
+                    None               => self.tail.prev = None,
                     Some(mut new_head) => unsafe { new_head.as_mut().prev = None },
                 }
 
@@ -148,13 +149,13 @@ impl<T: Default> LinkedList<T> {
 
     fn pop_back(&mut self) -> Option<*mut Node<T>>
     {
-        match self.tail {
+        match self.tail.prev {
             None       => None,
             Some(tail) => {
-                self.tail = unsafe { tail.as_ref().prev };
+                self.tail.prev = unsafe { tail.as_ref().prev };
 
-                match self.tail {
-                    None               => self.head = None,
+                match self.tail.prev {
+                    None               => self.head.next = None,
                     Some(mut new_tail) => unsafe { new_tail.as_mut().next = None },
                 }
 
@@ -163,6 +164,26 @@ impl<T: Default> LinkedList<T> {
         }
     }
 }
+
+
+impl<T: Default> Node<T> {
+    fn detach(&mut self)
+    {
+        if let Some(mut next) = self.next {
+            let next = unsafe { next.as_mut() };
+            next.prev = self.prev;
+        }
+
+        if let Some(mut prev) = self.prev {
+            let prev = unsafe { prev.as_mut() };
+            prev.next = self.next;
+        }
+
+        self.next = None;
+        self.prev = None;
+    }
+}
+
 
 
 #[cfg(test)]
@@ -208,7 +229,7 @@ mod tests {
     #[test]
     fn test_pop_front()
     {
-        let mut objs = allocate_unique_objs::<Node<usize>>(128);
+        let objs = allocate_unique_objs::<Node<usize>>(128);
 
         let mut list = LinkedList::new();
         for (i, o) in objs.iter_mut().enumerate() {
@@ -227,4 +248,35 @@ mod tests {
         }
     }
 
+    #[test]
+    fn test_accessors()
+    {
+        let objs = allocate_unique_objs::<Node<usize>>(128);
+
+        let mut list = LinkedList::new();
+        for (i, o) in objs.iter_mut().enumerate() {
+            o.element = i;
+
+            list.push_front(o);
+        }
+
+        assert_eq!(list.len(), objs.len());
+        assert_eq!(list.back_mut(), Some(&mut 0));
+        assert_eq!(list.pop_back(), Some(&mut objs[0] as *mut _));
+
+        *list.front_mut().unwrap() = 10;
+        assert_eq!(list.front(), Some(&10));
+        unsafe {
+            let n = list.pop_front().unwrap();
+            assert_eq!((*n).element, 10);
+        }
+        assert_eq!(list.len(), objs.len() - 2);
+
+        objs[1].detach();
+        assert_eq!(list.len(), objs.len() - 3);
+        assert_eq!(list.head.next.unwrap().as_ptr(), &mut objs[128 - 2] as *mut _);
+        assert_eq!(list.head.prev.is_none(), true);
+        assert_eq!(list.tail.next.is_none(), true);
+        assert_eq!(list.tail.prev.unwrap().as_ptr(), &mut objs[1] as *mut _);
+    }
 }

@@ -1,20 +1,21 @@
 #![feature(shared)]
+
+#![cfg(test)]
 #![feature(allocator_api)]
 
 use std::default::Default;
 use std::ptr::Shared;
-use std::mem;
 
 
 /// LinkedList struct.
-struct LinkedList<T: Default> {
+pub struct LinkedList<T: Default> {
     // There two fields are just dummy node to implement Node::detach easily.
     head: Node<T>,
     tail: Node<T>,
 }
 
 
-struct Node<T: Default> {
+pub struct Node<T: Default> {
     next: Option<Shared<Node<T>>>,
     prev: Option<Shared<Node<T>>>,
     element: T,
@@ -34,7 +35,7 @@ impl<T: Default> Default for Node<T> {
 
 
 impl<T: Default> LinkedList<T> {
-    fn new() -> LinkedList<T>
+    pub fn new() -> LinkedList<T>
     {
         LinkedList {
             head: Default::default(),
@@ -42,7 +43,7 @@ impl<T: Default> LinkedList<T> {
         }
     }
 
-    fn len(&self) -> usize
+    pub fn len(&self) -> usize
     {
         let mut node =
             if let Some(ref head) = self.head.next {
@@ -64,35 +65,35 @@ impl<T: Default> LinkedList<T> {
         cnt
     }
 
-    fn front(&self) -> Option<&T>
+    pub fn front(&self) -> Option<&T>
     {
         unsafe {
             self.head.next.as_ref().map(|node| &node.as_ref().element)
         }
     }
 
-    fn front_mut(&mut self) -> Option<&mut T>
+    pub fn front_mut(&mut self) -> Option<&mut T>
     {
         unsafe {
             self.head.next.as_mut().map(|node| &mut node.as_mut().element)
         }
     }
 
-    fn back(&self) -> Option<&T>
+    pub fn back(&self) -> Option<&T>
     {
         unsafe {
             self.tail.prev.as_ref().map(|node| &node.as_ref().element)
         }
     }
 
-    fn back_mut(&mut self) -> Option<&mut T>
+    pub fn back_mut(&mut self) -> Option<&mut T>
     {
         unsafe {
             self.tail.prev.as_mut().map(|node| &mut node.as_mut().element)
         }
     }
 
-    fn push_front(&mut self, new_node: *mut Node<T>)
+    pub fn push_front(&mut self, new_node: *mut Node<T>)
     {
         let mut new_shared_node = unsafe { Shared::new_unchecked(new_node) };
 
@@ -111,7 +112,7 @@ impl<T: Default> LinkedList<T> {
         self.head.next = new_shared_node;
     }
 
-    fn push_back(&mut self, new_node: *mut Node<T>)
+    pub fn push_back(&mut self, new_node: *mut Node<T>)
     {
         let mut new_shared_node = unsafe { Shared::new_unchecked(new_node) };
 
@@ -130,7 +131,7 @@ impl<T: Default> LinkedList<T> {
         self.tail.prev = new_shared_node;
     }
 
-    fn pop_front(&mut self) -> Option<*mut Node<T>>
+    pub fn pop_front(&mut self) -> Option<*mut Node<T>>
     {
         match self.head.next {
             None       => None,
@@ -147,7 +148,7 @@ impl<T: Default> LinkedList<T> {
         }
     }
 
-    fn pop_back(&mut self) -> Option<*mut Node<T>>
+    pub fn pop_back(&mut self) -> Option<*mut Node<T>>
     {
         match self.tail.prev {
             None       => None,
@@ -167,7 +168,7 @@ impl<T: Default> LinkedList<T> {
 
 
 impl<T: Default> Node<T> {
-    fn detach(&mut self)
+    pub fn detach(&mut self)
     {
         if let Some(mut next) = self.next {
             let next = unsafe { next.as_mut() };
@@ -191,6 +192,7 @@ mod tests {
     use super::*;
 
     use std::heap::{Alloc, System, Layout};
+    use std::mem;
     use std::slice;
 
     fn allocate_unique_objs<'a, T>(count: usize) -> &'a mut [T] where T: Default

@@ -1,6 +1,7 @@
-#![feature(shared)]
+#![crate_type = "rlib"]
+#![crate_name = "list5"]
 
-#![cfg(test)]
+#![feature(shared)]
 #![feature(allocator_api)]
 
 use std::default::Default;
@@ -186,10 +187,9 @@ impl<T: Default> Node<T> {
 }
 
 
-
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::{LinkedList, Node};
 
     use std::heap::{Alloc, System, Layout};
     use std::mem;

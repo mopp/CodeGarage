@@ -2,7 +2,7 @@
 #![crate_name = "list5"]
 
 #![feature(shared)]
-#![feature(allocator_api)]
+#![cfg_attr(test, feature(allocator_api))]
 
 use std::default::Default;
 use std::ptr::Shared;

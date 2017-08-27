@@ -195,7 +195,7 @@ mod tests {
     use std::mem;
     use std::slice;
 
-    fn allocate_unique_objs<'a, T>(count: usize) -> &'a mut [T] where T: Default
+    fn allocate_node_objs<'a, T>(count: usize) -> &'a mut [T] where T: Default
     {
         let type_size = mem::size_of::<T>();
         let align     = mem::align_of::<T>();
@@ -207,7 +207,7 @@ mod tests {
     #[test]
     fn test_push_front()
     {
-        let objs = allocate_unique_objs::<Node<usize>>(1024);
+        let objs = allocate_node_objs::<Node<usize>>(1024);
 
         let mut list = LinkedList::new();
         list.push_front(&mut objs[0] as *mut _);
@@ -219,7 +219,7 @@ mod tests {
     #[test]
     fn test_push_back()
     {
-        let objs = allocate_unique_objs::<Node<usize>>(1024);
+        let objs = allocate_node_objs::<Node<usize>>(1024);
 
         let mut list = LinkedList::new();
         list.push_back(&mut objs[1] as *mut _);
@@ -231,7 +231,7 @@ mod tests {
     #[test]
     fn test_pop_front()
     {
-        let objs = allocate_unique_objs::<Node<usize>>(128);
+        let objs = allocate_node_objs::<Node<usize>>(128);
 
         let mut list = LinkedList::new();
         for (i, o) in objs.iter_mut().enumerate() {
@@ -253,7 +253,7 @@ mod tests {
     #[test]
     fn test_accessors()
     {
-        let objs = allocate_unique_objs::<Node<usize>>(128);
+        let objs = allocate_node_objs::<Node<usize>>(128);
 
         let mut list = LinkedList::new();
         for (i, o) in objs.iter_mut().enumerate() {

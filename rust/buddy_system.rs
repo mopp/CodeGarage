@@ -72,6 +72,26 @@ impl BuddyManager {
             }
         }
     }
+
+    fn allocate_frames_by_order(&mut self, order: u8) -> Option<*mut Node<Frame>>
+    {
+        if MAX_ORDER <= order {
+            return None;
+        }
+
+        if 0 < self.count_free_frames[order as usize] {
+            self.count_free_frames[order as usize] -= 1;
+            self.lists[order as usize].pop_front()
+        } else {
+            // The list of the required order is empty.
+            // Then, find frames the lists of larger orders.
+            for i in ((order + 1)..(MAX_ORDER - 1)) {
+                if 0 < self.count_free_frames[i] {
+                    // TODO: write find buddy function in Node<Frame>.
+                }
+            }
+        }
+    }
 }
 
 
@@ -121,5 +141,11 @@ mod tests {
         bman.supply_frame_nodes(&mut nodes[0] as *mut _, count);
         expected_counts[0] += 1;
         assert_eq!(bman.count_free_frames[0], 1);
+    }
+
+    #[test]
+    fn allocate_objects()
+    {
+        let mut bman = BuddyManager::new();
     }
 }

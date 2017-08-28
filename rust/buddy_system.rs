@@ -101,10 +101,25 @@ mod tests {
     #[test]
     fn supply_frame_nodes()
     {
+        let mut bman = BuddyManager::new();
+        let mut expected_counts = [0usize; MAX_ORDER as usize];
+
         let count = 1024;
         let nodes = allocate_node_objs::<Node<Frame>>(count);
-        let mut bman = BuddyManager::new();
         bman.supply_frame_nodes(&mut nodes[0] as *mut _, count);
-        assert_eq!(bman.count_free_frames[10], 1);
+        expected_counts[10] += 1;
+        assert_eq!(bman.count_free_frames, expected_counts);
+
+        let count = 1024;
+        let nodes = allocate_node_objs::<Node<Frame>>(count);
+        bman.supply_frame_nodes(&mut nodes[0] as *mut _, count);
+        expected_counts[10] += 1;
+        assert_eq!(bman.count_free_frames[10], 2);
+
+        let count = 1;
+        let nodes = allocate_node_objs::<Node<Frame>>(count);
+        bman.supply_frame_nodes(&mut nodes[0] as *mut _, count);
+        expected_counts[0] += 1;
+        assert_eq!(bman.count_free_frames[0], 1);
     }
 }

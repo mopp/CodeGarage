@@ -85,11 +85,12 @@ impl BuddyManager {
         } else {
             // The list of the required order is empty.
             // Then, find frames the lists of larger orders.
-            for i in ((order + 1)..(MAX_ORDER - 1)) {
-                if 0 < self.count_free_frames[i] {
+            for i in (order + 1)..(MAX_ORDER - 1) {
+                if 0 < self.count_free_frames[i as usize] {
                     // TODO: write find buddy function in Node<Frame>.
                 }
             }
+            None
         }
     }
 }

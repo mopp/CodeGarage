@@ -11,7 +11,7 @@ use std::ptr;
 
 
 // 2^MAX_ORDER
-const MAX_ORDER: u8 = 16 + 1;
+const MAX_ORDER: usize = 16 + 1;
 
 
 struct Frame {
@@ -21,10 +21,9 @@ struct Frame {
 
 
 struct BuddyManager {
-    lists: [LinkedList<Frame>; MAX_ORDER as usize],
-    count_free_frames: [usize; MAX_ORDER as usize],
+    lists: [LinkedList<Frame>; MAX_ORDER],
+    count_free_frames: [usize; MAX_ORDER],
 }
-
 
 impl Default for Frame {
     fn default() -> Frame
@@ -41,7 +40,7 @@ impl BuddyManager {
     fn new() -> BuddyManager
     {
         let mut lists = unsafe {
-            let mut lists: [LinkedList<Frame>; MAX_ORDER as usize] = mem::uninitialized();
+            let mut lists: [LinkedList<Frame>; MAX_ORDER] = mem::uninitialized();
 
             for l in lists.iter_mut() {
                 ptr::write(l, LinkedList::new())
@@ -52,7 +51,7 @@ impl BuddyManager {
 
         BuddyManager {
             lists: lists,
-            count_free_frames: [0; MAX_ORDER as usize],
+            count_free_frames: [0; MAX_ORDER],
         }
     }
 
@@ -73,7 +72,7 @@ impl BuddyManager {
         }
     }
 
-    fn allocate_frames_by_order(&mut self, order: u8) -> Option<*mut Node<Frame>>
+    fn allocate_frames_by_order(&mut self, order: usize) -> Option<*mut Node<Frame>>
     {
         if MAX_ORDER <= order {
             return None;
@@ -123,7 +122,7 @@ mod tests {
     fn supply_frame_nodes()
     {
         let mut bman = BuddyManager::new();
-        let mut expected_counts = [0usize; MAX_ORDER as usize];
+        let mut expected_counts = [0usize; MAX_ORDER];
 
         let count = 1024;
         let nodes = allocate_node_objs::<Node<Frame>>(count);

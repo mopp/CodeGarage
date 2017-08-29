@@ -12,6 +12,14 @@ use std::ptr;
 
 // 2^MAX_ORDER
 const MAX_ORDER: usize = 16 + 1;
+const MAX_MEMORY_HOLE_COUNT: usize = 8;
+
+
+struct MemoryHole {
+    frames: *mut Node<Frame>,
+    count_frames: usize,
+    base_addr: usize,
+}
 
 
 struct Frame {
@@ -21,9 +29,23 @@ struct Frame {
 
 
 struct BuddyManager {
+    memory_holes: [MemoryHole; MAX_MEMORY_HOLE_COUNT],
     lists: [LinkedList<Frame>; MAX_ORDER],
     count_free_frames: [usize; MAX_ORDER],
 }
+
+
+impl MemoryHole {
+    fn new() -> MemoryHole
+    {
+        MemoryHole {
+            frames: ptr::null_mut(),
+            count_frames: 0,
+            base_addr: 0,
+        }
+    }
+}
+
 
 impl Default for Frame {
     fn default() -> Frame
@@ -39,7 +61,7 @@ impl Default for Frame {
 impl BuddyManager {
     fn new() -> BuddyManager
     {
-        let mut lists = unsafe {
+        let lists = unsafe {
             let mut lists: [LinkedList<Frame>; MAX_ORDER] = mem::uninitialized();
 
             for l in lists.iter_mut() {
@@ -49,7 +71,18 @@ impl BuddyManager {
             lists
         };
 
+        let holes = unsafe {
+            let mut holes: [MemoryHole; MAX_MEMORY_HOLE_COUNT] = mem::uninitialized();
+
+            for l in holes.iter_mut() {
+                ptr::write(l, MemoryHole::new())
+            }
+
+            holes
+        };
+
         BuddyManager {
+            memory_holes: holes,
             lists: lists,
             count_free_frames: [0; MAX_ORDER],
         }

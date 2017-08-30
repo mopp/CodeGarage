@@ -12,14 +12,6 @@ use std::ptr;
 
 // 2^MAX_ORDER
 const MAX_ORDER: usize = 16 + 1;
-const MAX_MEMORY_HOLE_COUNT: usize = 8;
-
-
-struct MemoryHole {
-    frames: *mut Node<Frame>,
-    count_frames: usize,
-    base_addr: usize,
-}
 
 
 struct Frame {
@@ -29,21 +21,11 @@ struct Frame {
 
 
 struct BuddyManager {
-    memory_holes: [MemoryHole; MAX_MEMORY_HOLE_COUNT],
-    lists: [LinkedList<Frame>; MAX_ORDER],
+    nodes: *mut Node<Frame>,
+    count_frames: usize,
+    base_addr: usize,
     count_free_frames: [usize; MAX_ORDER],
-}
-
-
-impl MemoryHole {
-    fn new() -> MemoryHole
-    {
-        MemoryHole {
-            frames: ptr::null_mut(),
-            count_frames: 0,
-            base_addr: 0,
-        }
-    }
+    lists: [LinkedList<Frame>; MAX_ORDER],
 }
 
 
@@ -59,7 +41,7 @@ impl Default for Frame {
 
 
 impl BuddyManager {
-    fn new() -> BuddyManager
+    fn new(nodes: *mut Node<Frame>, count: usize, base_addr: usize) -> BuddyManager
     {
         let lists = unsafe {
             let mut lists: [LinkedList<Frame>; MAX_ORDER] = mem::uninitialized();
@@ -71,21 +53,17 @@ impl BuddyManager {
             lists
         };
 
-        let holes = unsafe {
-            let mut holes: [MemoryHole; MAX_MEMORY_HOLE_COUNT] = mem::uninitialized();
-
-            for l in holes.iter_mut() {
-                ptr::write(l, MemoryHole::new())
-            }
-
-            holes
-        };
-
-        BuddyManager {
-            memory_holes: holes,
+        let mut bman = BuddyManager {
+            nodes: nodes,
+            count_frames: count,
+            base_addr: base_addr,
             lists: lists,
             count_free_frames: [0; MAX_ORDER],
-        }
+        };
+
+        bman.supply_frame_nodes(nodes, count);
+
+        bman
     }
 
     fn supply_frame_nodes(&mut self, nodes: *mut Node<Frame>, count: usize)
@@ -146,39 +124,15 @@ mod tests {
     }
 
     #[test]
-    fn init_buddy_manager()
+    fn new_buddy_manager()
     {
-        let bman = BuddyManager::new();
-    }
-
-    #[test]
-    fn supply_frame_nodes()
-    {
-        let mut bman = BuddyManager::new();
         let mut expected_counts = [0usize; MAX_ORDER];
 
         let count = 1024;
         let nodes = allocate_node_objs::<Node<Frame>>(count);
-        bman.supply_frame_nodes(&mut nodes[0] as *mut _, count);
+
+        let bman = BuddyManager::new(&mut nodes[0] as *mut _, count, 0);
         expected_counts[10] += 1;
         assert_eq!(bman.count_free_frames, expected_counts);
-
-        let count = 1024;
-        let nodes = allocate_node_objs::<Node<Frame>>(count);
-        bman.supply_frame_nodes(&mut nodes[0] as *mut _, count);
-        expected_counts[10] += 1;
-        assert_eq!(bman.count_free_frames[10], 2);
-
-        let count = 1;
-        let nodes = allocate_node_objs::<Node<Frame>>(count);
-        bman.supply_frame_nodes(&mut nodes[0] as *mut _, count);
-        expected_counts[0] += 1;
-        assert_eq!(bman.count_free_frames[0], 1);
-    }
-
-    #[test]
-    fn allocate_objects()
-    {
-        let mut bman = BuddyManager::new();
     }
 }

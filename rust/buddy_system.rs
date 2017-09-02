@@ -67,16 +67,35 @@ impl BuddyManager {
         bman
     }
 
+    fn push_node_frame(&mut self, order: usize, node_ptr: *mut Node<Frame>)
+    {
+        self.lists[order].push_back(node_ptr);
+        self.count_free_frames[order] += 1;
+    }
+
+    fn pop_node_frame(&mut self, order: usize) -> Option<*mut Node<Frame>>
+    {
+        self.count_free_frames[order] -= 1;
+        self.lists[order].pop_front()
+    }
+
+    fn is_empty_list(&self, order: usize) -> bool
+    {
+        self.count_free_frames[order] == 0
+    }
+
     fn supply_frame_nodes(&mut self, nodes: *mut Node<Frame>, count: usize)
     {
+        debug_assert!(count != 0);
+        debug_assert!(nodes.is_null() == false);
+
         let mut count_rest_frames = count;
         let mut current_node_ptr  = nodes;
 
-        for (order, list) in self.lists.iter_mut().enumerate().rev() {
+        for order in (0..MAX_ORDER).rev() {
             let count_frames_in_list = 1usize << order;
-            while (count_rest_frames != 0) && (count_frames_in_list <= count_rest_frames) {
-                list.push_back(current_node_ptr);
-                self.count_free_frames[order] += 1;
+            while count_frames_in_list <= count_rest_frames {
+                self.push_node_frame(order, current_node_ptr);
 
                 current_node_ptr = unsafe { current_node_ptr.offset(count_frames_in_list as isize) };
                 count_rest_frames -= count_frames_in_list;
@@ -88,50 +107,52 @@ impl BuddyManager {
     {
         match self.nodes.offset_to(node) {
             Some(offset) => offset as usize,
-            None         => panic!("unknown node is given."),
+            None         => panic!("unknown node pointer is given."),
         }
     }
 
-    fn get_buddy_frame(&mut self, node_ptr: *mut Node<Frame>) -> *mut Node<Frame>
+    fn get_buddy_frame(&mut self, node_ptr: *mut Node<Frame>, order: usize) -> *mut Node<Frame>
     {
-        match unsafe { node_ptr.as_ref() } {
-            None           => panic!("Got null node."),
-            Some(node_ref) => {
-                let buddy_index = self.get_frame_index(node_ptr) ^ (1 << node_ref.as_ref().order);
-                unsafe { self.nodes.offset(buddy_index as isize) }
-            }
-        }
+        let buddy_index = self.get_frame_index(node_ptr) ^ (1 << order);
+        unsafe { self.nodes.offset(buddy_index as isize) }
     }
 
-    fn allocate_frames_by_order(&mut self, order: usize) -> Option<*mut Node<Frame>>
+    fn allocate_frames_by_order(&mut self, request_order: usize) -> Option<*mut Node<Frame>>
     {
-        if MAX_ORDER <= order {
+        if MAX_ORDER <= request_order {
             return None;
         }
 
-        if 0 < self.count_free_frames[order] {
-            self.count_free_frames[order] -= 1;
-            self.lists[order].pop_front()
-        } else {
-            // The list of the required order is empty.
-            // Then, find frames the lists of larger orders.
-            for i in (order + 1)..(MAX_ORDER - 1) {
-                if 0 < self.count_free_frames[i] {
-                    // let list = &mut self.lists[i];
-                    // match list.pop_front() {
-                    //     None  => panic!("count_free_frames is invalid."),
-                    //     Some(node_ref)  => {
-                    //     }
-                    // }
-                    // self.find_buddy_frame();
-                    // let buddy_node =
+        for order in request_order..MAX_ORDER {
+            if self.is_empty_list(order) {
+                continue;
+            }
+
+            let node_ptr_opt = self.pop_node_frame(order);
+
+            match node_ptr_opt {
+                None           => panic!("the counter may be an error"),
+                Some(node_ptr) => {
+                    // Set the order and the extra parts are stored into the other lists.
+                    let allocated_frame     = unsafe {node_ptr.as_mut()}.unwrap().as_mut();
+                    allocated_frame.order   = request_order as u8;
+                    allocated_frame.is_free = false;
+
+                    for i in (order - 1)..(request_order - 1) {
+                        let buddy_node    = self.get_buddy_frame(node_ptr, i);
+                        let buddy_frame   = unsafe {buddy_node.as_mut().unwrap()}.as_mut();
+                        buddy_frame.order = i as u8;
+
+                        self.push_node_frame(i, buddy_node);
+                    }
                 }
             }
 
-            None
+            return node_ptr_opt;
         }
-    }
 
+        None
+    }
 }
 
 
@@ -188,10 +209,12 @@ mod tests {
     #[test]
     fn test_allocate_frames_by_order()
     {
-        let count = 1024;
-        let nodes = allocate_node_objs::<Node<Frame>>(count);
-        let bman  = BuddyManager::new(&mut nodes[0] as *mut _, count, 0);
+        let count    = 1024;
+        let nodes    = allocate_node_objs::<Node<Frame>>(count);
+        let mut bman = BuddyManager::new(&mut nodes[0] as *mut _, count, 0);
 
-        // bman.allocate_frames_by_order()
+        let node = bman.allocate_frames_by_order(1).unwrap();
+        assert_eq!(unsafe {node.as_ref()}.unwrap().as_ref().order, 1);
+        assert_eq!(unsafe {node.as_ref()}.unwrap().as_ref().is_free, false);
     }
 }

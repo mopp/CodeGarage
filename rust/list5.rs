@@ -184,6 +184,16 @@ impl<T: Default> Node<T> {
         self.next = None;
         self.prev = None;
     }
+
+    pub fn as_mut(&mut self) -> &mut T
+    {
+        &mut self.element
+    }
+
+    pub fn as_ref(&self) -> &T
+    {
+        &self.element
+    }
 }
 
 
@@ -280,5 +290,8 @@ mod tests {
         assert_eq!(list.head.prev.is_none(), true);
         assert_eq!(list.tail.next.is_none(), true);
         assert_eq!(list.tail.prev.unwrap().as_ptr(), &mut objs[1] as *mut _);
+
+        *(objs[0].as_mut()) = 10;
+        assert_eq!(objs[0].as_ref(), &10);
     }
 }

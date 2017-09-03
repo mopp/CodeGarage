@@ -1,5 +1,6 @@
-#![feature(offset_to)]
 #![cfg_attr(test, feature(allocator_api))]
+#![feature(offset_to)]
+#![feature(unique)]
 
 extern crate list5;
 
@@ -8,6 +9,7 @@ use list5::Node;
 
 use std::default::Default;
 use std::mem;
+use std::ptr::Unique;
 use std::ptr;
 
 
@@ -22,7 +24,7 @@ struct Frame {
 
 
 struct BuddyManager {
-    nodes: *mut Node<Frame>,
+    nodes: Unique<Node<Frame>>,
     count_frames: usize,
     base_addr: usize,
     count_free_frames: [usize; MAX_ORDER],
@@ -54,6 +56,11 @@ impl BuddyManager {
             lists
         };
 
+        let nodes = match unsafe { Unique::new(nodes) } {
+            Some(u) => u,
+            None  => panic!("The node pointer is null !"),
+        };
+
         let mut bman = BuddyManager {
             nodes: nodes,
             count_frames: count,
@@ -67,13 +74,13 @@ impl BuddyManager {
         bman
     }
 
-    fn push_node_frame(&mut self, order: usize, node_ptr: *mut Node<Frame>)
+    fn push_node_frame(&mut self, order: usize, node_ptr: Unique<Node<Frame>>)
     {
         self.lists[order].push_back(node_ptr);
         self.count_free_frames[order] += 1;
     }
 
-    fn pop_node_frame(&mut self, order: usize) -> Option<*mut Node<Frame>>
+    fn pop_node_frame(&mut self, order: usize) -> Option<Unique<Node<Frame>>>
     {
         self.count_free_frames[order] -= 1;
         self.lists[order].pop_front()
@@ -84,13 +91,12 @@ impl BuddyManager {
         self.count_free_frames[order] == 0
     }
 
-    fn supply_frame_nodes(&mut self, nodes: *mut Node<Frame>, count: usize)
+    fn supply_frame_nodes(&mut self, nodes: Unique<Node<Frame>>, count: usize)
     {
         debug_assert!(count != 0);
-        debug_assert!(nodes.is_null() == false);
 
         let mut count_rest_frames = count;
-        let mut current_node_ptr  = nodes;
+        let mut current_node_ptr  = nodes.as_ptr();
 
         for order in (0..MAX_ORDER).rev() {
             let count_frames_in_list = 1usize << order;

@@ -2,10 +2,12 @@
 #![crate_name = "list5"]
 
 #![feature(shared)]
+#![feature(unique)]
 #![cfg_attr(test, feature(allocator_api))]
 
 use std::default::Default;
 use std::ptr::Shared;
+use std::ptr::Unique;
 
 
 /// LinkedList struct.
@@ -20,18 +22,6 @@ pub struct Node<T: Default> {
     next: Option<Shared<Node<T>>>,
     prev: Option<Shared<Node<T>>>,
     element: T,
-}
-
-
-impl<T: Default> Default for Node<T> {
-    fn default() -> Node<T>
-    {
-        Node {
-            next: None,
-            prev: None,
-            element: Default::default(),
-        }
-    }
 }
 
 
@@ -94,9 +84,9 @@ impl<T: Default> LinkedList<T> {
         }
     }
 
-    pub fn push_front(&mut self, new_node: *mut Node<T>)
+    pub fn push_front(&mut self, new_node: Unique<Node<T>>)
     {
-        let mut new_shared_node = unsafe { Shared::new_unchecked(new_node) };
+        let mut new_shared_node = Shared::from(new_node);
 
         {
             let n = unsafe { new_shared_node.as_mut() };
@@ -113,9 +103,9 @@ impl<T: Default> LinkedList<T> {
         self.head.next = new_shared_node;
     }
 
-    pub fn push_back(&mut self, new_node: *mut Node<T>)
+    pub fn push_back(&mut self, new_node: Unique<Node<T>>)
     {
-        let mut new_shared_node = unsafe { Shared::new_unchecked(new_node) };
+        let mut new_shared_node = Shared::from(new_node);
 
         {
             let n = unsafe { new_shared_node.as_mut() };
@@ -132,7 +122,7 @@ impl<T: Default> LinkedList<T> {
         self.tail.prev = new_shared_node;
     }
 
-    pub fn pop_front(&mut self) -> Option<*mut Node<T>>
+    pub fn pop_front(&mut self) -> Option<Unique<Node<T>>>
     {
         match self.head.next {
             None       => None,
@@ -144,12 +134,12 @@ impl<T: Default> LinkedList<T> {
                     Some(mut new_head) => unsafe { new_head.as_mut().prev = None },
                 }
 
-                Some(head.as_ptr())
+                unsafe { Some(Unique::new_unchecked(head.as_ptr())) }
             }
         }
     }
 
-    pub fn pop_back(&mut self) -> Option<*mut Node<T>>
+    pub fn pop_back(&mut self) -> Option<Unique<Node<T>>>
     {
         match self.tail.prev {
             None       => None,
@@ -161,8 +151,20 @@ impl<T: Default> LinkedList<T> {
                     Some(mut new_tail) => unsafe { new_tail.as_mut().next = None },
                 }
 
-                Some(tail.as_ptr())
+                unsafe { Some(Unique::new_unchecked(tail.as_ptr())) }
             }
+        }
+    }
+}
+
+
+impl<T: Default> Default for Node<T> {
+    fn default() -> Node<T>
+    {
+        Node {
+            next: None,
+            prev: None,
+            element: Default::default(),
         }
     }
 }
@@ -204,6 +206,7 @@ mod tests {
     use std::heap::{Alloc, System, Layout};
     use std::mem;
     use std::slice;
+    use std::ptr::Unique;
 
     fn allocate_node_objs<'a, T>(count: usize) -> &'a mut [T] where T: Default
     {
@@ -220,7 +223,7 @@ mod tests {
         let objs = allocate_node_objs::<Node<usize>>(1024);
 
         let mut list = LinkedList::new();
-        list.push_front(&mut objs[0] as *mut _);
+        list.push_front(unsafe {Unique::new_unchecked(&mut objs[0])});
         assert_eq!(list.len(), 1);
         assert_eq!(list.back(), Some(&0usize));
         assert_eq!(list.front(), Some(&0usize));
@@ -232,7 +235,7 @@ mod tests {
         let objs = allocate_node_objs::<Node<usize>>(1024);
 
         let mut list = LinkedList::new();
-        list.push_back(&mut objs[1] as *mut _);
+        list.push_back(unsafe {Unique::new_unchecked(&mut objs[1])});
         assert_eq!(list.len(), 1);
         assert_eq!(list.back(), Some(&0usize));
         assert_eq!(list.front(), Some(&0usize));
@@ -247,7 +250,7 @@ mod tests {
         for (i, o) in objs.iter_mut().enumerate() {
             o.element = i;
 
-            list.push_front(o);
+            list.push_front(unsafe {Unique::new_unchecked(o)});
         }
 
         assert_eq!(list.len(), objs.len());
@@ -255,8 +258,12 @@ mod tests {
         assert_eq!(list.front(), Some(&(objs.len() - 1)));
 
         for i in (0..objs.len()).rev() {
-            let n = list.pop_front();
-            assert_eq!(i, unsafe {(*n.unwrap()).element});
+            match list.pop_front() {
+                None       => panic!("error"),
+                Some(node) => {
+                    assert_eq!(i, unsafe {node.as_ref().element});
+                }
+            }
         }
     }
 
@@ -269,18 +276,20 @@ mod tests {
         for (i, o) in objs.iter_mut().enumerate() {
             o.element = i;
 
-            list.push_front(o);
+            list.push_front(unsafe {Unique::new_unchecked(o)});
         }
 
         assert_eq!(list.len(), objs.len());
         assert_eq!(list.back_mut(), Some(&mut 0));
-        assert_eq!(list.pop_back(), Some(&mut objs[0] as *mut _));
+        assert_eq!(list.pop_back().is_some(), true);
 
         *list.front_mut().unwrap() = 10;
         assert_eq!(list.front(), Some(&10));
-        unsafe {
-            let n = list.pop_front().unwrap();
-            assert_eq!((*n).element, 10);
+        match list.pop_front() {
+            None  => panic!("error"),
+            Some(node) => {
+                assert_eq!(unsafe {node.as_ref().element}, 10);
+            }
         }
         assert_eq!(list.len(), objs.len() - 2);
 

@@ -56,7 +56,7 @@ impl BuddyManager {
             lists
         };
 
-        let nodes = match unsafe { Unique::new(nodes) } {
+        let nodes = match Unique::new(nodes) {
             Some(u) => u,
             None  => panic!("The node pointer is null !"),
         };
@@ -101,7 +101,7 @@ impl BuddyManager {
         for order in (0..MAX_ORDER).rev() {
             let count_frames_in_list = 1usize << order;
             while count_frames_in_list <= count_rest_frames {
-                self.push_node_frame(order, current_node_ptr);
+                self.push_node_frame(order, unsafe {Unique::new_unchecked(current_node_ptr)});
 
                 current_node_ptr = unsafe { current_node_ptr.offset(count_frames_in_list as isize) };
                 count_rest_frames -= count_frames_in_list;
@@ -109,21 +109,18 @@ impl BuddyManager {
         }
     }
 
-    fn get_frame_index(&self, node: *mut Node<Frame>) -> usize
+    fn get_frame_index(&self, node: Unique<Node<Frame>>) -> usize
     {
-        match self.nodes.offset_to(node) {
-            Some(offset) => offset as usize,
-            None         => panic!("unknown node pointer is given."),
-        }
+        self.nodes.as_ptr().offset_to(node.as_ptr()).unwrap() as usize
     }
 
-    fn get_buddy_frame(&mut self, node_ptr: *mut Node<Frame>, order: usize) -> *mut Node<Frame>
+    fn get_buddy_frame(&mut self, node: Unique<Node<Frame>>, order: usize) -> Unique<Node<Frame>>
     {
-        let buddy_index = self.get_frame_index(node_ptr) ^ (1 << order);
-        unsafe { self.nodes.offset(buddy_index as isize) }
+        let buddy_index = self.get_frame_index(node) ^ (1 << order);
+        unsafe { Unique::new_unchecked(self.nodes.as_ptr().offset(buddy_index as isize)) }
     }
 
-    fn allocate_frames_by_order(&mut self, request_order: usize) -> Option<*mut Node<Frame>>
+    fn allocate_frames_by_order(&mut self, request_order: usize) -> Option<Unique<Node<Frame>>>
     {
         if MAX_ORDER <= request_order {
             return None;
@@ -134,27 +131,30 @@ impl BuddyManager {
                 continue;
             }
 
-            let node_ptr_opt = self.pop_node_frame(order);
+            let node_opt = self.pop_node_frame(order);
 
-            match node_ptr_opt {
+            match node_opt {
                 None           => panic!("the counter may be an error"),
-                Some(node_ptr) => {
-                    // Set the order and the extra parts are stored into the other lists.
-                    let allocated_frame     = unsafe {node_ptr.as_mut()}.unwrap().as_mut();
-                    allocated_frame.order   = request_order as u8;
-                    allocated_frame.is_free = false;
-
+                Some(mut node) => {
                     for i in (order - 1)..(request_order - 1) {
-                        let buddy_node    = self.get_buddy_frame(node_ptr, i);
-                        let buddy_frame   = unsafe {buddy_node.as_mut().unwrap()}.as_mut();
-                        buddy_frame.order = i as u8;
+                        let mut buddy_node= self.get_buddy_frame(node, i);
+                        {
+                            let buddy_frame   = unsafe { buddy_node.as_mut() }.as_mut();
+                            buddy_frame.order = i as u8;
+                        }
 
                         self.push_node_frame(i, buddy_node);
                     }
+
+                    // Set the order and the extra parts are stored into the other lists.
+                    let allocated_frame     = unsafe { node.as_mut() }.as_mut();
+                    allocated_frame.order   = request_order as u8;
+                    allocated_frame.is_free = false;
+
                 }
             }
 
-            return node_ptr_opt;
+            return node_opt;
         }
 
         None
@@ -199,9 +199,9 @@ mod tests {
         let nodes = allocate_node_objs::<Node<Frame>>(count);
         let bman  = BuddyManager::new(&mut nodes[0] as *mut _, count, 0);
 
-        assert_eq!(bman.get_frame_index(&mut nodes[0] as *mut _), 0);
-        assert_eq!(bman.get_frame_index(&mut nodes[10] as *mut _), 10);
-        assert_eq!(bman.get_frame_index(&mut nodes[1023] as *mut _), 1023);
+        assert_eq!(bman.get_frame_index(unsafe { Unique::new_unchecked(&mut nodes[0] as *mut _) }), 0);
+        assert_eq!(bman.get_frame_index(unsafe { Unique::new_unchecked(&mut nodes[10] as *mut _) }), 10);
+        assert_eq!(bman.get_frame_index(unsafe { Unique::new_unchecked(&mut nodes[1023] as *mut _) }), 1023);
     }
 
     #[test]
@@ -220,7 +220,7 @@ mod tests {
         let mut bman = BuddyManager::new(&mut nodes[0] as *mut _, count, 0);
 
         let node = bman.allocate_frames_by_order(1).unwrap();
-        assert_eq!(unsafe {node.as_ref()}.unwrap().as_ref().order, 1);
-        assert_eq!(unsafe {node.as_ref()}.unwrap().as_ref().is_free, false);
+        assert_eq!(unsafe {node.as_ref()}.as_ref().order, 1);
+        assert_eq!(unsafe {node.as_ref()}.as_ref().is_free, false);
     }
 }

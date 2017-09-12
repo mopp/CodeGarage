@@ -15,6 +15,7 @@ use std::ptr;
 
 // 2^MAX_ORDER
 const MAX_ORDER: usize = 16 + 1;
+const FRAME_SIZE: usize = 4096;
 
 
 struct Frame {
@@ -91,6 +92,15 @@ impl BuddyManager {
         self.count_free_frames[order] == 0
     }
 
+    fn count_free_frames(&self) -> usize
+    {
+        self.count_free_frames
+            .iter()
+            .enumerate()
+            .inspect(|x| println!("about to filter: {:?}", x))
+            .fold(0, |acc, (order, &x)| acc + (x * (1 << order)))
+    }
+
     fn supply_frame_nodes(&mut self, nodes: Unique<Node<Frame>>, count: usize)
     {
         debug_assert!(count != 0);
@@ -150,7 +160,6 @@ impl BuddyManager {
                     let allocated_frame     = unsafe { node.as_mut() }.as_mut();
                     allocated_frame.order   = request_order as u8;
                     allocated_frame.is_free = false;
-
                 }
             }
 
@@ -222,5 +231,7 @@ mod tests {
         let node = bman.allocate_frames_by_order(1).unwrap();
         assert_eq!(unsafe {node.as_ref()}.as_ref().order, 1);
         assert_eq!(unsafe {node.as_ref()}.as_ref().is_free, false);
+
+        assert_eq!(bman.count_free_frames(), 1023);
     }
 }

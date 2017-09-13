@@ -146,7 +146,7 @@ impl BuddyManager {
             match node_opt {
                 None           => panic!("the counter may be an error"),
                 Some(mut node) => {
-                    for i in (order - 1)..(request_order - 1) {
+                    for i in (request_order..order).rev() {
                         let mut buddy_node= self.get_buddy_frame(node, i);
                         {
                             let buddy_frame   = unsafe { buddy_node.as_mut() }.as_mut();
@@ -228,10 +228,17 @@ mod tests {
         let nodes    = allocate_node_objs::<Node<Frame>>(count);
         let mut bman = BuddyManager::new(&mut nodes[0] as *mut _, count, 0);
 
+        assert_eq!(bman.count_free_frames(), 1024);
+
         let node = bman.allocate_frames_by_order(1).unwrap();
         assert_eq!(unsafe {node.as_ref()}.as_ref().order, 1);
         assert_eq!(unsafe {node.as_ref()}.as_ref().is_free, false);
 
-        assert_eq!(bman.count_free_frames(), 1023);
+        assert_eq!(bman.count_free_frames(), 1022);
+
+        let node = bman.allocate_frames_by_order(0).unwrap();
+        assert_eq!(unsafe {node.as_ref()}.as_ref().order, 0);
+        assert_eq!(unsafe {node.as_ref()}.as_ref().is_free, false);
+        assert_eq!(bman.count_free_frames(), 1021);
     }
 }

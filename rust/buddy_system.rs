@@ -101,6 +101,21 @@ impl BuddyManager {
             .fold(0, |acc, (order, &x)| acc + (x * (1 << order)))
     }
 
+    fn count_used_frames(&self) -> usize
+    {
+        self.count_frames - self.count_free_frames()
+    }
+
+    fn free_memory_size(&self) -> usize
+    {
+        self.count_free_frames() * FRAME_SIZE
+    }
+
+    fn used_memory_size(&self) -> usize
+    {
+        self.count_used_frames() * FRAME_SIZE
+    }
+
     fn supply_frame_nodes(&mut self, nodes: Unique<Node<Frame>>, count: usize)
     {
         debug_assert!(count != 0);
@@ -218,7 +233,7 @@ mod tests {
     {
         let count = 1024;
         let nodes = allocate_node_objs::<Node<Frame>>(count);
-        let bman  = BuddyManager::new(&mut nodes[0] as *mut _, count, 0);
+        let _bman  = BuddyManager::new(&mut nodes[0] as *mut _, count, 0);
     }
 
     #[test]
@@ -240,5 +255,8 @@ mod tests {
         assert_eq!(unsafe {node.as_ref()}.as_ref().order, 0);
         assert_eq!(unsafe {node.as_ref()}.as_ref().is_free, false);
         assert_eq!(bman.count_free_frames(), 1021);
+        assert_eq!(bman.count_used_frames(), 3);
+        assert_eq!(bman.free_memory_size(), 1021 * FRAME_SIZE);
+        assert_eq!(bman.used_memory_size(), 3 * FRAME_SIZE);
     }
 }

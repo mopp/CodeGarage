@@ -145,7 +145,7 @@ impl BuddyManager {
         unsafe { Unique::new_unchecked(self.nodes.as_ptr().offset(buddy_index as isize)) }
     }
 
-    fn allocate_frames_by_order(&mut self, request_order: usize) -> Option<Unique<Node<Frame>>>
+    fn allocate_frame_by_order(&mut self, request_order: usize) -> Option<Unique<Node<Frame>>>
     {
         if MAX_ORDER <= request_order {
             return None;
@@ -237,7 +237,7 @@ mod tests {
     }
 
     #[test]
-    fn test_allocate_frames_by_order()
+    fn test_allocate_frame_by_order()
     {
         let count    = 1024;
         let nodes    = allocate_node_objs::<Node<Frame>>(count);
@@ -245,13 +245,13 @@ mod tests {
 
         assert_eq!(bman.count_free_frames(), 1024);
 
-        let node = bman.allocate_frames_by_order(1).unwrap();
+        let node = bman.allocate_frame_by_order(1).unwrap();
         assert_eq!(unsafe {node.as_ref()}.as_ref().order, 1);
         assert_eq!(unsafe {node.as_ref()}.as_ref().is_free, false);
 
         assert_eq!(bman.count_free_frames(), 1022);
 
-        let node = bman.allocate_frames_by_order(0).unwrap();
+        let node = bman.allocate_frame_by_order(0).unwrap();
         assert_eq!(unsafe {node.as_ref()}.as_ref().order, 0);
         assert_eq!(unsafe {node.as_ref()}.as_ref().is_free, false);
         assert_eq!(bman.count_free_frames(), 1021);

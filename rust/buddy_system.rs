@@ -139,7 +139,7 @@ impl BuddyManager {
         self.nodes.as_ptr().offset_to(node.as_ptr()).unwrap() as usize
     }
 
-    fn get_buddy_frame(&mut self, node: Unique<Node<Frame>>, order: usize) -> Unique<Node<Frame>>
+    fn get_buddy_node(&mut self, node: Unique<Node<Frame>>, order: usize) -> Unique<Node<Frame>>
     {
         let buddy_index = self.get_frame_index(node) ^ (1 << order);
         unsafe { Unique::new_unchecked(self.nodes.as_ptr().offset(buddy_index as isize)) }
@@ -162,7 +162,7 @@ impl BuddyManager {
                 None           => panic!("the counter may be an error"),
                 Some(mut node) => {
                     for i in (request_order..order).rev() {
-                        let mut buddy_node= self.get_buddy_frame(node, i);
+                        let mut buddy_node= self.get_buddy_node(node, i);
                         {
                             let buddy_frame   = unsafe { buddy_node.as_mut() }.as_mut();
                             buddy_frame.order = i as u8;
@@ -182,6 +182,29 @@ impl BuddyManager {
         }
 
         None
+    }
+
+    fn free_frame(&mut self, unique_node: Unique<Node<Frame>>)
+    {
+        let node = unsafe { &mut *unique_node.as_ptr() };
+        let frame = node.as_mut();
+
+        for order in (frame.order as usize)..MAX_ORDER {
+            // Try to merge the buddy frames.
+            let mut unique_buddy_node = self.get_buddy_node(unique_node, order);
+            let buddy_node = unsafe { unique_buddy_node.as_mut() };
+            {
+                let buddy_frame = buddy_node.as_ref();
+                if buddy_frame.is_free == false {
+                    break;
+                }
+                self.count_free_frames[buddy_frame.order as usize] -= 1;
+            }
+
+            buddy_node.detach();
+        }
+
+        self.push_node_frame(frame.order as usize, unique_node);
     }
 }
 
@@ -229,7 +252,7 @@ mod tests {
     }
 
     #[test]
-    fn test_get_buddy_frame()
+    fn test_get_buddy_node()
     {
         let count = 1024;
         let nodes = allocate_node_objs::<Node<Frame>>(count);
@@ -237,7 +260,7 @@ mod tests {
     }
 
     #[test]
-    fn test_allocate_frame_by_order()
+    fn test_allocate_frame_by_order_and_free()
     {
         let count    = 1024;
         let nodes    = allocate_node_objs::<Node<Frame>>(count);
@@ -258,5 +281,8 @@ mod tests {
         assert_eq!(bman.count_used_frames(), 3);
         assert_eq!(bman.free_memory_size(), 1021 * FRAME_SIZE);
         assert_eq!(bman.used_memory_size(), 3 * FRAME_SIZE);
+
+        bman.free_frame(node);
+        assert_eq!(bman.count_free_frames(), 1022);
     }
 }

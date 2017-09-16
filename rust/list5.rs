@@ -5,9 +5,10 @@
 #![feature(unique)]
 #![cfg_attr(test, feature(allocator_api))]
 
+use std::convert::{AsRef, AsMut};
 use std::default::Default;
-use std::ptr::Shared;
-use std::ptr::Unique;
+use std::ptr::{Unique, Shared};
+
 
 
 /// LinkedList struct.
@@ -186,15 +187,21 @@ impl<T: Default> Node<T> {
         self.next = None;
         self.prev = None;
     }
+}
 
-    pub fn as_mut(&mut self) -> &mut T
-    {
-        &mut self.element
-    }
 
-    pub fn as_ref(&self) -> &T
+impl<T: Default> AsRef<T> for Node<T> {
+    fn as_ref(&self) -> &T
     {
         &self.element
+    }
+}
+
+
+impl<T: Default> AsMut<T> for Node<T> {
+    fn as_mut(&mut self) -> &mut T
+    {
+        &mut self.element
     }
 }
 

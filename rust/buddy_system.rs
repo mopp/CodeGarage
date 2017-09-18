@@ -97,7 +97,6 @@ impl BuddyManager {
         self.count_free_frames
             .iter()
             .enumerate()
-            .inspect(|x| println!("about to filter: {:?}", x))
             .fold(0, |acc, (order, &x)| acc + (x * (1 << order)))
     }
 
@@ -284,5 +283,22 @@ mod tests {
 
         bman.free_frame(node);
         assert_eq!(bman.count_free_frames(), 1022);
+
+        let count    = 512;
+        let nodes    = allocate_node_objs::<Node<Frame>>(count);
+        let mut bman = BuddyManager::new(&mut nodes[0] as *mut _, count, 0);
+        let node1 = bman.allocate_frame_by_order(1).unwrap();
+        assert_eq!(bman.count_free_frames(), 510);
+        assert_eq!(bman.count_used_frames(), 2);
+        assert_eq!(bman.free_memory_size(), 510 * FRAME_SIZE);
+        assert_eq!(bman.used_memory_size(), 2 * FRAME_SIZE);
+
+        let _node2 = bman.allocate_frame_by_order(3).unwrap();
+        assert_eq!(bman.count_free_frames(), 502);
+        assert_eq!(bman.count_used_frames(), 10);
+
+        bman.free_frame(node1);
+        assert_eq!(bman.count_free_frames(), 504);
+        assert_eq!(bman.count_used_frames(), 8);
     }
 }

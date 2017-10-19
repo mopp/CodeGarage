@@ -1,3 +1,5 @@
+[rfcs/2137-variadic.md at master · rust-lang/rfcs](https://github.com/rust-lang/rfcs/blob/master/text/2137-variadic.md)
+
 - Feature Name: variadic
 - Start Date: 2017-08-21
 - RFC PR: https://github.com/rust-lang/rfcs/pull/2137
@@ -141,95 +143,67 @@ int main(void)
 # リファレンスレベルの説明
 [reference-level-explanation]: #reference-level-explanation
 
-LLVM already provides a set of intrinsics, implementing `va_start`, `va_arg`,
-`va_end`, and `va_copy`. The compiler will insert a call to the `va_start`
-intrinsic at the start of the function to provide the `VaList` argument (if
-used), and a matching call to the `va_end` intrinsic on any exit from the
-function. The implementation of `VaList::arg` will call `va_arg`. The
-implementation of `VaList::copy` wil call `va_copy`, and then `va_end` after
-the closure exits.
+LLVMが既に`va_start`, `va_arg`, `va_end`, `va_copy`を提供している
+`VaList`が関数内で使用されれば、コンパイラが`va_start`への呼び出しを先頭に追加し、関数が終了するときに`va_end`も呼ぶようにする
+`VaList::arg`の実装は`va_arg`への呼び出しになる
+`VaList::copy`の実装は`va_copy`になり、クロージャ終了時に、コピーした引数の分の`va_end`を呼ぶ
 
-`VaList` may become a language item (`#[lang="VaList"]`) to attach the
-appropriate compiler handling.
+`VaList`は恐らくコンパイラが適切に処理するためにlanguage item (`#[lang="VaList"]`)となる
 
-The compiler may need to handle the type `VaList` specially, in order to
-provide the desired parameter-passing semantics at FFI boundaries. In
-particular, some platforms define `va_list` as a single-element array, such
-that declaring a `va_list` allocates storage, but passing a `va_list` as a
-function parameter occurs by pointer. The compiler must arrange to handle both
-receiving and passing `VaList` parameters in a manner compatible with the C
-ABI.
+FFI境界で望まれるparameter-passing semanticsを提供するため、コンパイラは`VaList`型を特別に処理することになる
+特に、一部のプラットフォームでは`va_list`を単一要素配列として定義している
+つまり、`va_list`を宣言するとstorageが割当られるが、`va_list`はポインタとして渡される
+! 構造体の中に動的に確保した配列のポインタが入ってるだけで、それを引数に渡している、という意味かと思う
+コンパイラはC ABI互換を保ちつつ引数受け取りと引数渡しをしなければならない
 
-The C standard requires that the call to `va_end` for a `va_list` occur in the
-same function as the matching `va_start` or `va_copy` for that `va_list`. Some
-C implementations do not enforce this requirement, allowing for functions that
-call `va_end` on a passed-in `va_list` that they did not create. This RFC does
-not define a means of implementing or calling non-standard functions like these.
+Cの規格では`va_end`は`va_start`か`va_copy`を呼び出した関数内で実行される必要がある
+しかし、幾つかのCの実装はこれを強制しない
+このRFCではそれらの実装、呼び出しについては定義しない
 
-Note that on some platforms, these LLVM intrinsics do not fully implement the
-necessary functionality, expecting the invoker of the intrinsic to provide
-additional LLVM IR code. On such platforms, rustc will need to provide the
-appropriate additional code, just as clang does.
+幾つかのプラットフォームで、LLVM組み込み関数の実装が完全ではないのため、呼び出し側が追加のLLVM IRを提供することを期待している
+それらのプラットフォームでは`rustc`も`clang`がしているように適切な追加LLVM IRを提供する必要がある
 
-This RFC intentionally does not specify or expose the mechanism used to limit
-the use of `VaList::arg` only to specific types. The compiler should provide
-errors similar to those associated with passing types through FFI function
-calls.
+このRFCは`VaList::arg`の使用を特定の型に制限するようなメカニズムを意図的に書かないようにしている
+コンパイラはFFI関数呼び出しを通して渡される型に関連づいたエラーを提供しなければならない
 
-# Drawbacks
-[drawbacks]: #drawbacks
 
-This feature is highly unsafe, and requires carefully written code to extract
-the appropriate argument types provided by the caller, based on whatever
-arbitrary runtime information determines those types. However, in this regard,
-this feature provides no more unsafety than the equivalent C code, and in fact
-provides several additional safety mechanisms, such as automatic handling of
-type promotions, lifetimes, copies, and cleanup.
+# 欠点
 
-# Rationale and Alternatives
-[alternatives]: #alternatives
+このfeatureは強くunsafeで、呼び出し側が指定した適切な引数型を取り出すコードは、任意のランタイム情報にもとづいて、注意深く書かれる必要がある
+しかし、この点においては、このfeatureは同等のCコードと同じくらいにunsafeであるが、安全性のためのメカニズムを幾つか追加する
+例えば、型拡張の自動適用、ライフタイム、コピー、クリーンアップなど
+! コピーとクリーンアップは`va_copy`と`va_end`の呼び出しをコンパイラが挿入することだと思われる
 
-This represents one of the few C-compatible interfaces that Rust does not
-provide. Currently, Rust code wishing to interoperate with C has no alternative
-to this mechanism, other than hand-written C stubs. This also limits the
-ability to incrementally translate C to Rust, or to bind to C interfaces that
-expect variadic callbacks.
 
-Rather than having the compiler invent an appropriate lifetime parameter, we
-could simply require the unsafe code implementing a variadic function to avoid
-ever allowing the `VaList` structure to outlive it. However, if we can provide
-an appropriate compile-time lifetime check, doing would make it easier to
-correctly write the appropriate unsafe code.
+# 論拠と代替案
 
-Rather than naming the argument in the variadic function signature, we could
-provide a `VaList::start` function to return one. This would also allow calling
-`start` more than once. However, this would complicate the lifetime handling
-required to ensure that the `VaList` does not outlive the call to the variadic
-function.
+このRFCはRustが提供していないC互換インターフェースの提案である
+現時点では、Cと相互運用されることを望まれるRustコードは、Cを書く以外の代替案を持たない
+これはインクリメンタルにCをRustに書き直すこと、もしくは、可変長引数コールバックを期待するCインターフェースの使用を制限している
 
-We could use several alternative syntaxes to declare the argument in the
-signature, including `...args`, or listing the `VaList` or `VaList<'a>` type
-explicitly. The latter, however, would require care to ensure that code could
-not reference or alias the lifetime.
+コンパイラが適切なライフタイムをでっち上げるよりも、我々が`VaList`がoutliveすることを避ける可変長引数関数をunsafeで実装する方法もある
+しかし、もし、我々が適切なコンパイル時ライフタイムチェックを提供できるなら、適切なunsafeコードを書くことをより簡単にする
+! ?
 
-# Unresolved questions
-[unresolved]: #unresolved-questions
+可変長引数関数の引数に名前を付けるよりも、引数を返す`VaList::start`関数を定義するほうがいいかもしれない
+これによって、`start`を複数回呼び出せるようになるが、ライフタイムの制御が難しくなる
 
-When implementing this feature, we will need to determine whether the compiler
-can provide an appropriate lifetime that prevents a `VaList` from outliving its
-corresponding variadic function.
+`...args`や、型を明示する`VaList`、`VaList<'a>`などの、引数宣言の別な構文を使ってもいい
+後者ではライフタイムの参照やエイリアスがないことを保証する必要がある
+! 可変長引数関数を使用するときの話？もしくはライフタイム付きの引数を別の関数に渡したいとき？
 
-Currently, Rust does not allow passing a closure to C code expecting a pointer
-to an `extern "C"` function. If this becomes possible in the future, then
-variadic closures would become useful, and we should add them at that time.
 
-This RFC only supports the platform's native `"C"` ABI, not any other ABI. Code
-may wish to define variadic functions for another ABI, and potentially more
-than one such ABI in the same program. However, such support should not
-complicate the common case. LLVM has extremely limited support for this, for
-only a specific pair of platforms (supporting the Windows ABI on platforms that
-use the System V ABI), with no generalized support in the underlying
-intrinsics. The LLVM intrinsics only support using the ABI of the containing
-function. Given the current state of the ecosystem, this RFC only proposes
-supporting the native `"C"` ABI for now. Doing so will not prevent the
-introduction of support for non-native ABIs in the future.
+# 未解決の疑問
+
+このfeatureを実装するとき、コンパイラが適切なライフタイムを`VaList`に付加できるかを判断する必要がある
+
+現時点で、Rustは`extern "C"`関数へのポインタを期待するCコードにクロージャを渡すことはできない
+将来可能になったとき、可変長引数クロージャは便利になるはずなので、そのとき追加する
+
+このRFCはプラットフォームのネイティブなC ABIのみをサポートし、他のABIはサポートしない
+同じプログラム内で他のABIへの可変長引数関数を定義したくなるかもしれない
+しかし、それらのサポートで一般的なケースを複雑にすべきではない
+LLVMでは極めて限定的にこれをサポートしているのみで、一般的なサポートはない (System V ABIを使用するプラットフォーム上でのWindows ABIサポートなどのみ)
+LLVM組み込み関数は、包含する関数のABIのみをサポートしている
+エコシステムの現状を考えて、このRFCでは今のところネイティブC ABIをサポートすることのみを提案している
+そうすることで将来的に非ネイティブABIのサポートの導入を妨げないようにする

@@ -1,6 +1,10 @@
 #![no_std]
 #![feature(lang_items)]
 
+#[cfg(test)]
+#[macro_use]
+extern crate std;
+
 pub fn sample_func() {
 }
 
@@ -23,4 +27,14 @@ pub extern fn panic_fmt(_: core::fmt::Arguments, _: &'static str, _: u32) -> !
 pub extern fn abort()
 {
     loop {}
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_it_works() {
+    }
 }

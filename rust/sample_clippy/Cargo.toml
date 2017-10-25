@@ -1,0 +1,10 @@
+[package]
+name = "sample_clippy"
+version = "0.1.0"
+authors = ["mopp <hello@mopp.jp>"]
+
+[dependencies]
+clippy = {version = "*", optional = true}
+
+[features]
+default = []

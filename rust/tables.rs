@@ -5,10 +5,10 @@ trait HierarchicalLevel: TableLevel {
     type NextLevel: TableLevel;
 }
 
-enum Level4 {}
-enum Level3 {}
-enum Level2 {}
-enum Level1 {}
+struct Level4;
+struct Level3;
+struct Level2;
+struct Level1;
 
 impl TableLevel for Level4 {}
 impl TableLevel for Level3 {}

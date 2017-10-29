@@ -166,17 +166,19 @@ unsafe fn moo() {
 
 ## Conditional compilation: `cfg!(target_feature)`
 
-The
-[`cfg!(target_feature = "feature_name")`](https://github.com/rust-lang/rust/issues/29717) macro
-allows querying at compile-time whether a target feature is enabled in the
-current context. It returns `true` if the feature is enabled, and `false`
-otherwise.
+現在のコンテキストであるfeatureが有効かどうかを[`cfg!(target_feature = "feature_name")`](https://github.com/rust-lang/rust/issues/29717) マクロによって参照できる
+有効であれば`true`、無効であれば`false`を返す
 
-In a function annotated with `#[target_feature(enable = "feature_name")]` the macro
-`cfg!(target_feature = "feature_name")` expands to `true` if the generated
-code for the function uses the feature ([current bug](https://github.com/rust-lang/rust/issues/42515).
+もし生成されるコードがfeatureをサポートしていれば、`#[target_feature(enable = "feature_name")]`が付いた関数内で、`cfg!(target_feature = "feature_name")`マクロは `true`に展開される
+[current bug](https://github.com/rust-lang/rust/issues/42515).
+code for the function uses the feature 
 
-Note: how accurate `cfg!(target_feature)` can be made is an "Unresolved Question" (see the section below). Ideally, when `cfg!(target_feature)` is used in a function that does not support the feature, it should still return true in the cases where the function gets inlined into a context that does support the feature. This can happen often if the function is generic, or an `#[inline]` function defined in a different crate. This can results in errors at monomorphization time only if `#![cfg(target_feature)]` is used, but not if `if cfg!(target_feature)` is used since in this case all branches need to type-check properly.
+Note: 
+
+Note: how accurate `cfg!(target_feature)` can be made is an "Unresolved Question" (see the section below).
+Ideally, when `cfg!(target_feature)` is used in a function that does not support the feature, it should still return true in the cases where the function gets inlined into a context that does support the feature.
+This can happen often if the function is generic, or an `#[inline]` function defined in a different crate.
+This can results in errors at monomorphization time only if `#![cfg(target_feature)]` is used, but not if `if cfg!(target_feature)` is used since in this case all branches need to type-check properly.
 
 **Example 3 (conditional compilation):**
 

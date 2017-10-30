@@ -166,19 +166,17 @@ unsafe fn moo() {
 
 ## Conditional compilation: `cfg!(target_feature)`
 
-現在のコンテキストであるfeatureが有効かどうかを[`cfg!(target_feature = "feature_name")`](https://github.com/rust-lang/rust/issues/29717) マクロによって参照できる
+現在のコンテキストで、あるfeatureが有効かどうかを[`cfg!(target_feature = "feature_name")`](https://github.com/rust-lang/rust/issues/29717) マクロによって問い合わせる
 有効であれば`true`、無効であれば`false`を返す
 
 もし生成されるコードがfeatureをサポートしていれば、`#[target_feature(enable = "feature_name")]`が付いた関数内で、`cfg!(target_feature = "feature_name")`マクロは `true`に展開される
 [current bug](https://github.com/rust-lang/rust/issues/42515).
-code for the function uses the feature 
 
-Note: 
-
-Note: how accurate `cfg!(target_feature)` can be made is an "Unresolved Question" (see the section below).
-Ideally, when `cfg!(target_feature)` is used in a function that does not support the feature, it should still return true in the cases where the function gets inlined into a context that does support the feature.
-This can happen often if the function is generic, or an `#[inline]` function defined in a different crate.
-This can results in errors at monomorphization time only if `#![cfg(target_feature)]` is used, but not if `if cfg!(target_feature)` is used since in this case all branches need to type-check properly.
+Note: `cfg!(target_feature)`がどのくらい正確かは未解決の問題
+理想的には、`cfg!(target_feature)`がそのfeatureをサポートしない関数で使用されたときでも、そのfeatureをサポートするコンテキストにinline化されたときはtrueを返すべき
+genericなときや、別のcrateでinlineな関数が定義されていた場合によく起こりうる
+> This can results in errors at monomorphization time only if `#![cfg(target_feature)]` is used, but not if `if cfg!(target_feature)` is used since in this case all branches need to type-check properly.
+??? 
 
 **Example 3 (conditional compilation):**
 
@@ -226,38 +224,35 @@ unsafe fn foo() {
 
 ## Run-time feature detection
 
-Writing safe wrappers around `unsafe` functions annotated with
-`#[target_feature]` requires run-time feature detection. This RFC adds the following
-macro to the standard library:
+`#[target_feature]`付きのunsafe関数の安全なラッパーを書くには実行時feature検出を必要とする
+このRFCでは以下のマクロを標準ライブラリに追加する
 
 - `cfg_feature_enabled!("feature") -> bool-expr`
 
-with the following semantics: "if the host hardware on which the current code is running
-supports the `"feature"`, the `bool-expr` that `cfg_feature_enabled!` expands to has
-value `true`, and `false` otherwise.
+実行されるハードウェアが"feature"をサポートするとき、`true`が`false`になる
 
-If the result is known at compile-time, the macro approach allows expanding the result
-without performing any run-time detection at all. This RFC does not guarantee that this
-is the case, but [the current implementation](https://github.com/rust-lang-nursery/stdsimd)
-does this.
+コンパイル時にわかるときは、実行時検出をしなくても良い
+ただし、このRFCは、その挙動を保証するものではない
+が、[現在の実装ではそうしているらしい](https://github.com/rust-lang-nursery/stdsimd)
 
-Examples of using run-time feature detection have been shown throughout this RFC, there
-isn't really more to it.
+実行時検出の例はこのRFCで示されるが、それらの例以上のものは無い
 
-If the API of run-time feature detection turns out to be controversial before
-stabilization, a follow-up RFC that focus on run-time feature detection will need
-to be merged, blocking the stabilization of this RFC.
+もし、実行時検出のAPIが安定化の前に論争になるならば、このRFCをブロックするRFCがマージされるはず
 
 # How We Teach This
 [how-we-teach-this]: #how-we-teach-this
 
-There are two parts to this story, the low-level part, and the high-level part.
+low-level part と the high-level part に別れるよ
 
 **Example 5 (high-level usage of target features):**
 
 **note**: `ifunc` is not part of this RFC, but just an example of what can be built on top of it.
+**note**: `ifunc` はこのRFCの一部ではないが、その上で構築できる例として載せる
 
-In the high-level part we have the `ifunc` function attribute, implemented as a procedural macro (some of these macros [already](https://github.com/alexcrichton/cfg-specialize/blob/master/cfg-specialize-macros) [exist](https://github.com/parched/runtime-target-feature-rs)):
+`ifunc` 関数アトリビュートは手続きマクロとして実装されている
+手続きマクロを使った実装例: 
+[alexcrichton/cfg-specialize](https://github.com/alexcrichton/cfg-specialize)
+[parched/runtime-target-feature-rs: Rust procedural macro attribute to enable target features at runtime](https://github.com/parched/runtime-target-feature-rs)
 
 ```rust
 #[ifunc("default", "sse4", "avx", "avx2")]  //< MAGIC
@@ -271,7 +266,7 @@ fn main() {
 }
 ```
 
-The following example covers what `ifunc` might expand to.
+次の例では`ifunc`がどう展開されるかを示す
 
 **Example 6 (ifunc expansion):**
 
@@ -306,9 +301,8 @@ fn initialize_foo() -> typeof(foo) {
 }
 ```
 
-Note that there are many solutions to this problem and they have different
-trade-offs, but these can be explored in procedural macros. When wrapping unsafe
-intrinsics, conditional compilation can be used to create zero-cost wrappers:
+この問題に対して多くの解法があり、それぞれ異なるトレードオフを持つことに注意
+unsafeなintrinsicsをラップするとき、条件付きコンパイルはゼロコストラッパーのために使用できる
 
 **Example 7 (three-layered approach to target features):**
 
@@ -340,25 +334,28 @@ fn my_intrinsic(a: f64, b: f64) -> f64 {
 #[ifunc("default", "avx")]
 fn my_intrinsic_rt(a: f64, b: f64) -> f64 { my_intrinsic(a, b) }
 ```
-Due to the low-level and high-level nature of these feature we will need two
-kinds of documentation. For the low level part:
 
-- document how to do compile-time and run-time feature detection using `cfg!(target_feature)` and `cfg_feature_enabled!`,
-- document how to use `#[target_feature]`,
-- document how to use all of these together to solve problems like in the examples of this RFC.
+low-levelとhigh-levelの性質のために、2種類のドキュメンテーションが必要になる
 
-For the high-level part we should aim to bring third-party crates implementing
-`ifunc!` or similar close to 1.0 releases before stabilization.
+low-levelパート
+
+- `cfg!(target_feature)` と `cfg_feature_enabled!`で、どうやってコンパイル時とランタイム時にfeature検出をするかのドキュメント
+- `#[target_feature]`をどう使うかのドキュメント,
+- 上記の例のような問題を、それらの組み合わせでどう解決するかのドキュメント
+
+high-levelパート
+
+安定化の前に、 `ifunc!`や似たような何かを実装するサードパーティcrateを持ってくることを目指すべき
+
 
 # Drawbacks
 [drawbacks]: #drawbacks
 
-- Obvious increase in language complexity.
+- 明らかに言語の複雜性が増す
 
-The main drawback of not solving this issue is that many libraries that require
-conditional feature-dependent compilation or run-time selection of code for
-different features (SIMD, BMI, AES, ...) cannot be written efficiently in stable
-Rust.
+このissueで解決されない主なdrawbackは、
+条件付きfeature依存コンパイル、異なるfeatureに合わせた実行時のコード選択を必要とするライブラリをstableなRustで効率的に書くことは出来ないということ
+! ここで言う効率的 (efficiently)がよくわからない
 
 
 # Alternatives
@@ -366,47 +363,56 @@ Rust.
 
 # Backend options
 
-An alternative would be to mix stable, unstable, unknown,
-and backend-specific features into `--target-feature`.
+代替案はstable, unstable, unknown, バックエンド固有featuresを`--target-feature`に混ぜること
 
 ## Make `#[target_feature]` safe
 
-Calling a function annotated with `#[target_feature]` on a host that does not
-support the feature invokes undefined behavior in LLVM, the assembler, and
-possibly the hardware [See this comment](https://github.com/rust-lang/rfcs/pull/2045#issuecomment-311325202).
+`#[target_feature]`付きの関数をサポート外のホストで呼び出すことはLLVM, アセンブラ、ハードウェア上で未定義動作を引き起こす
+[コメントを参照](https://github.com/rust-lang/rfcs/pull/2045#issuecomment-311325202).
 
-That is, calling a function on a target that does not support its feature set is
-_undefined behavior_ and this RFC cannot specify otherwise. The main reason is that `target_feature` is a promise from the user to the toolchain and the hardware, that the code will not be reached in a CPU that does not support the feature. LLVM, the assembler, and the hardware all assume that the user will not violate this contract, and there is little that the Rust compiler can do to make this safer:
-  - The Rust compiler cannot emit a compile-time diagnostic because it cannot know whether the user is going to run the binary in a CPU that supports the features or not.
-  - A run-time diagnostic _always_ incurs a run-time cost, and is only possible iff the absence of a feature can be detected at run-time (the "Future Extensions" section of this RFC discusses how to implement "Run-time diagnostics" to detect this, when possible).
+このRFCでは、未定義動作になる、以外のことを指定しない
+何故なら、`target_feature`はユーザからツールチェインとハードウェアへの約束事であり、そのfeatureをサポートしないCPUでは実行されないから
 
-However, the `--target-feature/--target-cpu` compiler options allows one to implicitly generate binaries that reliably run into undefined behavior without needing any `unsafe` annotations at all, so the answer to the question "Should `#[target_feature]` be safe/unsafe?" is indeed a hard one.
+LLVM, アセンブラ、ハードウェアはユーザがこの決まりを脅かすことはないと想定する
+Rustコンパイラがこれをより完全にするためにできることは殆ど無い
+- Rustコンパイラはコンパイル時診断を出力出来ない、なぜなら、コンパイラはユーザがバイナリをfeatureをサポートするCPUで実行するかどうかわからないから
+- 実行時診断では、実行時コストが常に発生し、実行時にfeatureが検出されない場合にのみ可能になる ("Future Extensions"へ)
+> ??? A run-time diagnostic _always_ incurs a run-time cost, and is only possible iff the absence of a feature can be detected at run-time .
 
-The main differences between `#[target_feature]` and `--target-feature`/`--enable-feature` are the following:
-- `--target-feature/--enable-feature` are "backend options" while `#[target_feature]` is part of the language
-- `--target-feature/--enable-feature` is specified by whoever compiles the code, while `#[target_feature]` is specified by whoever writes the code
-- compiling safe Rust code for a particular target, and then running the binary on that target, can only produce undefined behavior iff `#[target_feature]` is safe.
+しかし、`--target-feature/--target-cpu`オプションは`unsafe`の必要無しに、未定義動作を引き起こすバイナリを暗黙に生成させる
+故に、`#[target_feature]`はsafeであるべきかunsafeであるべきか？という疑問への答えは難しい
 
-This RFC chooses that the `#[target_feature]` attribute only applies to `unsafe fn`s, so that if one compiles safe Rust source code for a particular target, and then runs the binary on that particular target, no unsafety can result.
+`#[target_feature]` と `--target-feature`/`--enable-feature` の違い
+- `--target-feature/--enable-feature` は "バックエンドオプション" だが `#[target_feature]` は言語の一部である
+- `--target-feature/--enable-feature` はコンパイル時に誰でも指定できるが`#[target_feature]` はコードを書いた人が指定できる
+- `#[target_feature]`がsafeなときに限り、特定のターゲットに対するsafeなRustコードのコンパイルし、実行することは未定義動作のみ生成できる
+> ??? compiling safe Rust code for a particular target, and then running the binary on that target, can only produce undefined behavior iff `#[target_feature]` is safe.
 
-Note that we can always make `#[target_feature]` safe in the future without breaking backwards compatibility, but the opposite is not true. That is, if somebody figures out a way of making `#[target_feature]` safe such that the above holds, we can always make that change.
+このRFCでは`#[target_feature]`アトリビュートは`unsafe fn`へのみ適用できる
+故に、安全ではない結果を引き起こしうる
+
+将来的には、後方互換を壊すこと無く、`#[target_feature]`を常に安全にできるが、その逆は出来ない
+誰か安全にする方法がわかったら、いつでも変更できる
+! 誰かわかったら教えてくれってこと？
 
 ## Guarantee no segfaults from `unsafe` code
 
-Calling a `#[target_feature]`-annotated function on a platform that does not
-support it invokes undefined behavior. We could guarantee that this does not
-happen by always doing run-time feature detection, introducing a run-time cost
-in the process, and by only accepting features for which run-time feature
-detection can be done.
+`#[target_feature]`付きの関数をサポート外のプラットフォームで呼び出すことは未定義動作を引き起こす
+これは常に実行時feature検出を行うことで回避できる
+実行時コストが伴う
+また、実行時検出が可能なfeatureしか使用できなくなる
 
-This RFC considers that any run-time cost is unacceptable as a default
-for a combination of language features whose main domain of use is a performance
-sensitive one.
-
-The "Future Extension"s section discusses how to implement this in an opt-in way,
-e.g., as a sort of binary instrumentation.
+このRFCでは、language featuresの組み合わせがパフォーマンスに敏感なドメインでは、如何なる実行時コストもデフォルトでは認められないと考えている
+"Future Extension"のセクションで、どうやってこれをオプトインの方法で実装するか議論する
 
 ## Make `#[target_feature] + #[inline(always)]` incompatible
+`#[target_feature]` と `#[inline(always)]`が同時に指定されるとエラーになることを要求する
+featureが満たされないとinline化出来ない
+なので、このRFCを簡単にするためこれらをincompatibleにすることを検討している
+! 矛盾させる、兼任出来ないようにする、みたいな意味？
+
+一方で技術的に正しいので、コンパイラは、如何なる関数でも非互換なコンテキストにinline化されることを検出し、これが起こらないようにすべきである
+関数が`#[inline(always)]`のときにエラーが発生しても、RFCやコンパイラの実装は大幅に優位に簡単にはならない
 
 This RFC requires the compiler to error when a function marked with both `#[target_feature]` and the `#[inline(always)]` attribute cannot be inlined in a particular call site due to incompatible features. So we might consider to simplify this RFC by just making these attributes incompatible.
 
@@ -414,29 +420,28 @@ While this is technically correct, the compiler must detect when any function (`
 
 ## Removing run-time feature detection from this RFC
 
-This RFC adds an API for run-time feature detection to the
-standard library.
+このRFCではランタイムfeature検出のAPIを標準ライブラリに追加する
+This RFC adds an API for run-time feature detection to the standard library.
 
-The alternative would be to implement similar functionality as a third-party crate that
-might eventually be moved into the nursery. [Such crates already exist](https://docs.rs/cupid/)
+代替案として、サードパーティcrateとして似たような機能を実装する
+rust-nurseryにだんだんと移していく
+https://docs.rs/cupid/
+! Intel CPU用のcrateっぽい
 
-In particular, the API proposed in this RFC is "stringly-typed" (to make it uniform with the other features being proposed), but arguably a third party crate might want to use an `enum` to allow pattern-matching on features. These APIs have not been sufficiently explored in the ecosystem yet.
+In particular, the API proposed in this RFC is "stringly-typed" (to make it uniform with the other features being proposed), but arguably a third party crate might want to use an `enum` to allow pattern-matching on features.
+These APIs have not been sufficiently explored in the ecosystem yet.
 
 The main arguments in favor of including run-time feature detection in this RFC are:
 
-- it is impossible to write safe wrappers around `#[target_feature]` without it
-- implementing it requires the `asm!` macro or linking to a C library (or linking
-  to a C wrapper around assembly),
-- run-time detection should be kept in sync with the addition of new target features,
-- the compiler might want to use LLVM's run-time feature detection which is part
-  of compiler-rt.
+- `#[target_feature]`の安全なラッパーを作れなくなる
+- 実装に`asm!`かCライブラリへのリンクなどは必要になる
+- ランタイム検出は新しいtarget featuresの追加と同期されるべき
+- コンパイラはcompiler-rtの一部であるLLVMのランタイムfeature検出を使用するはず
 
-The consensus in the internal forums and previous discussions seem to be that this
-is worth it.
+内部フォーラムとこれまでの議論での合意はこれに価値があると思われている
 
-It might turn out that the people from the future are able to come up with a better
-API. But in that case we can always deprecate the current API and include the new
-one in the standard library.
+これによって、将来もっといいAPIが考案されるかもしれない
+そうした場合、標準ライブラリで現在のAPIをdeprecateにして、新しいものを追加しないと行けない
 
 ## Adding full cpuid support to the standard library
 

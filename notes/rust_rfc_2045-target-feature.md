@@ -421,41 +421,36 @@ While this is technically correct, the compiler must detect when any function (`
 ## Removing run-time feature detection from this RFC
 
 このRFCではランタイムfeature検出のAPIを標準ライブラリに追加する
-This RFC adds an API for run-time feature detection to the standard library.
 
 代替案として、サードパーティcrateとして似たような機能を実装する
 rust-nurseryにだんだんと移していく
 https://docs.rs/cupid/
 ! Intel CPU用のcrateっぽい
 
-In particular, the API proposed in this RFC is "stringly-typed" (to make it uniform with the other features being proposed), but arguably a third party crate might want to use an `enum` to allow pattern-matching on features.
-These APIs have not been sufficiently explored in the ecosystem yet.
+In particular, the API proposed in this RFC is "stringly-typed" (to make it uniform with the other features being proposed),
+but arguably a third party crate might want to use an `enum` to allow pattern-matching on features.
+これらのAPIはエコシステム内で十分に調査されていない
 
-The main arguments in favor of including run-time feature detection in this RFC are:
+このRFCでランタイムfeature検出を含めることを支持する主な主張は以下
 
 - `#[target_feature]`の安全なラッパーを作れなくなる
 - 実装に`asm!`かCライブラリへのリンクなどは必要になる
 - ランタイム検出は新しいtarget featuresの追加と同期されるべき
 - コンパイラはcompiler-rtの一部であるLLVMのランタイムfeature検出を使用するはず
 
-内部フォーラムとこれまでの議論での合意はこれに価値があると思われている
+内部フォーラムとこれまでの議論での合意ではこれらに価値があると思われている
 
 これによって、将来もっといいAPIが考案されるかもしれない
 そうした場合、標準ライブラリで現在のAPIをdeprecateにして、新しいものを追加しないと行けない
 
 ## Adding full cpuid support to the standard library
 
-The `cfg_feature_enable!` macro is designed to work specifically with the features
-that can be used via `cfg_target_feature` and `#[target_feature]`. However, in the
-grand scheme of things, run-time detection of these features is only a small part
-of the information provided by `cpuid`-like CPU instructions.
+The `cfg_feature_enabled!` macro is designed to work specifically with the features that can be used via `cfg_target_feature` and `#[target_feature]`.
+However, in the grand scheme of things, run-time detection of these features is only a small part of the information provided by `cpuid`-like CPU instructions.
 
-Currently at least two great implementations of cpuid-like functionality exists in
-Rust for x86: [cupid](https://github.com/shepmaster/cupid) and
-[rust-cpuid](https://github.com/gz/rust-cpuid). Adding the macro to the standard library
-does not prevent us from adding more comprehensive functionality in the future, and
-it does not prevent us from reusing any of these libraries in the internal
-implementation of the macro.
+Currently at least two great implementations of cpuid-like functionality exists in Rust for x86: [cupid](https://github.com/shepmaster/cupid) and [rust-cpuid](https://github.com/gz/rust-cpuid).
+Adding the macro to the standard library does not prevent us from adding more comprehensive functionality in the future, and
+it does not prevent us from reusing any of these libraries in the internal implementation of the macro.
 
 # Unresolved questions
 [unresolved]: #unresolved-questions

@@ -2,62 +2,44 @@
 #![feature(unique)]
 #![cfg_attr(test, feature(allocator_api))]
 
-use std::convert::{AsRef, AsMut};
-use std::default::Default;
-use std::ptr::{Unique, Shared};
+use std::ptr::Shared;
 
-pub type Link<T> = Shared<Node<T>>;
+pub trait Node {
+    fn next(&self) -> &Shared<Self>;
+    fn prev(&self) -> &Shared<Self>;
+    fn next_mut(&mut self) -> &mut Shared<Self>;
+    fn prev_mut(&mut self) -> &mut Shared<Self>;
 
+    fn init_link(&mut self) {
+        *self.next_mut() = self.into();
+        *self.prev_mut() = self.into();
+    }
 
-// pub struct Node<T> {
-//     next: Option<Shared<Node<T>>>,
-//     prev: Option<Shared<Node<T>>>,
-//     element: T,
-// }
-
-
-pub trait Node<T> {
-    fn init_link(&mut self);
-    fn next(&self) -> Option<&Link<T>>;
-    fn prev(&self) -> Option<&Link<T>>;
-    fn next_mut(&mut self) -> Option<&mut Link<T>>;
-    fn prev_mut(&mut self) -> Option<&mut Link<T>>;
-    fn set_next(&mut self, Link<T>);
-
-    // TODO: make this function.
-    fn count_until(&self, target: &Link<T>, count: usize) -> usize {
-        if let Some(next) = self.next() {
-            if next.as_ptr() == target.as_ptr() {
-                count
-            } else {
-                unsafe { next.as_ref().count_until(target, count + 1) }
-            }
-        } else {
+    fn count_until(&self, target: &Shared<Self>, count: usize) -> usize {
+        if self.next().as_ptr() == target.as_ptr() {
             count
+        } else {
+            unsafe {
+                self.next().as_ref().count_until(target, count + 1)
+            }
         }
     }
 
     fn length(&self) -> usize {
-        match (self.next(), self.prev()) {
-            (None, None)    => 0,
-            (Some(_), None) => panic!("Invalid condition !"),
-            (None, Some(_)) => panic!("Invalid condition !"),
-            (Some(next), Some(prev)) => unsafe {
-                next.as_ref().count_until(prev, 0)
-            }
-        }
+        self.count_until(&Shared::from(self), 1)
     }
 
-    fn insert_next(&mut self, new_next: *mut Node<T>) {
-        if self.next().is_some() {
-        } else {
-            unsafe {
-                self.set_next(Shared::new_unchecked(new_next))
-            }
+    fn insert_next(&mut self, mut new_next: Shared<Self>) {
+        if self.next().as_ptr() == new_next.as_ptr() {
+            return;
         }
-    }
 
-    fn insert_prev(&mut self, new_prev: &mut Node<T>) {
+        unsafe {
+            *new_next.as_mut().prev_mut() = self.into();
+            *new_next.as_mut().next_mut() = *self.next();
+            *self.next_mut().as_mut().prev_mut() = new_next;
+            *self.next_mut() = new_next;
+        }
     }
 }
 
@@ -67,53 +49,32 @@ mod tests {
     use super::*;
     use std::heap::{Alloc, System, Layout};
     use std::mem;
-    use std::slice;
 
     struct Frame {
-        next: Option<Link<Frame>>,
-        prev: Option<Link<Frame>>,
+        next: Shared<Frame>,
+        prev: Shared<Frame>,
         number: usize,
     }
 
-    impl Frame {
-        fn new(n: usize) -> Frame{
-            Frame {
-                next: None,
-                prev: None,
-                number: n,
-            }
+    impl Node for Frame {
+        fn next(&self) -> &Shared<Self> {
+            &self.next
+        }
+
+        fn prev(&self) -> &Shared<Self> {
+            &self.prev
+        }
+
+        fn next_mut(&mut self) -> &mut Shared<Self> {
+            &mut self.next
+        }
+
+        fn prev_mut(&mut self) -> &mut Shared<Self> {
+            &mut self.prev
         }
     }
 
-    impl Node<Frame> for Frame {
-        fn init_link(&mut self) {
-            self.next = None;
-            self.prev = None;
-            self.number = 0;
-        }
-
-        fn next(&self) -> Option<&Link<Frame>> {
-            self.next.as_ref()
-        }
-
-        fn prev(&self) -> Option<&Link<Frame>> {
-            self.prev.as_ref()
-        }
-
-        fn next_mut(&mut self) -> Option<&mut Link<Frame>> {
-            self.next.as_mut()
-        }
-
-        fn prev_mut(&mut self) -> Option<&mut Link<Frame>> {
-            self.prev.as_mut()
-        }
-
-        fn set_next(&mut self, new: Link<Frame>) {
-            self.next = Some(new)
-        }
-    }
-
-    fn allocate_nodes<T: Node<T>>(count: usize) -> *mut T {
+    fn allocate_nodes<T>(count: usize) -> *mut T {
         let type_size = mem::size_of::<T>();
         let align     = mem::align_of::<T>();
         let layout    = Layout::from_size_align(count * type_size, align).unwrap();
@@ -129,12 +90,15 @@ mod tests {
 
         let frame1 = unsafe {&mut *nodes.offset(0) as &mut Frame};
         let frame2 = unsafe {&mut *nodes.offset(1) as &mut Frame};
+        let frame3 = unsafe {&mut *nodes.offset(2) as &mut Frame};
         frame1.init_link();
         frame2.init_link();
+        frame3.init_link();
 
-        frame1.insert_next(frame2 as *mut _);
-        frame2.init_link();
+        assert_eq!(frame1.length(), 1);
 
-        assert_eq!(frame1.length(), 0);
+        frame1.insert_next(Shared::from(frame2));
+        frame1.insert_next(Shared::from(frame3));
+        assert_eq!(frame1.length(), 3);
     }
 }

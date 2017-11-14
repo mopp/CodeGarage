@@ -35,10 +35,14 @@ pub trait Node {
         }
 
         unsafe {
-            *new_next.as_mut().prev_mut() = self.into();
-            *new_next.as_mut().next_mut() = *self.next();
-            *self.next_mut().as_mut().prev_mut() = new_next;
-            *self.next_mut() = new_next;
+            {
+                let new_next = new_next.as_mut();
+                *new_next.prev_mut() = self.into();
+                *new_next.next_mut() = *self.next();
+            }
+            let next_mut = self.next_mut();
+            *next_mut.as_mut().prev_mut() = new_next;
+            *next_mut = new_next;
         }
     }
 }

@@ -10,13 +10,18 @@ pub trait Node {
     fn next_mut(&mut self) -> &mut Shared<Self>;
     fn prev_mut(&mut self) -> &mut Shared<Self>;
 
+    fn is_self(&self, target: &Shared<Self>) -> bool {
+        let shared: Shared<Self> = self.into();
+        shared.as_ptr() == target.as_ptr()
+    }
+
     fn init_link(&mut self) {
         *self.next_mut() = self.into();
         *self.prev_mut() = self.into();
     }
 
     fn count_until(&self, target: &Shared<Self>, count: usize) -> usize {
-        if self.next().as_ptr() == target.as_ptr() {
+        if self.is_self(target) {
             count
         } else {
             unsafe {
@@ -26,11 +31,11 @@ pub trait Node {
     }
 
     fn length(&self) -> usize {
-        self.count_until(&Shared::from(self), 1)
+        self.count_until(self.prev(), 1)
     }
 
     fn insert_next(&mut self, mut new_next: Shared<Self>) {
-        if self.next().as_ptr() == new_next.as_ptr() {
+        if self.is_self(&new_next) {
             return;
         }
 

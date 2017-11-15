@@ -81,3 +81,113 @@ pub use self::Visibility::{self, Public, Inherited};
 
 # リファレンスレベルの説明
 
+構文
+```
+IMPORT = ATTRS VISIBILITY `use` [`::`] IMPORT_TREE `;`
+
+IMPORT_TREE = `*` |
+              REL_MOD_PATH `::` `*` |
+              `{` IMPORT_TREE_LIST `}` |
+              REL_MOD_PATH `::` `{` IMPORT_TREE_LIST `}` |
+              REL_MOD_PATH [`as` IDENT]
+
+IMPORT_TREE_LIST = Ø | (IMPORT_TREE `,`)* IMPORT_TREE [`,`]
+
+REL_MOD_PATH = (IDENT `::`)* IDENT
+```
+
+Resolution:
+
+最初に、`::`, `self`, `super`で始まらない限り、インポートツリーの前に`::`が付けられる
+次に、`a::b::self`を不正なものとするために`{self}`/`{self as name}`が特別に処理されることを除いて、インポートツリー全体が平坦化されたように処理される
+
+```rust
+// 変換前
+use a::{
+    b::{self as s, c, d as e},
+    f::*,
+    g::h as i,
+    *,
+};
+
+// 変換後
+use ::a::b as s;
+use ::a::b::c;
+use ::a::b::d as e;
+use ::a::f::*;
+use ::a::g::h as i;
+use ::a::*;
+```
+
+このデシュガーにより、いろいろなコーナーケースが自然に解決される
+
+```
+use an::{*, *}; // Use an owl!
+
+=>
+
+use an::*;
+use an::*; // Legal, but reported as unused by `unused_imports` lint.
+```
+
+
+
+## 他の提案との関係
+このRFCは他のインポートに関する提案とは独立した、インクリメンタルな改善であるが、その他のRFCに影響を持ちうる.
+This RFC is an incremental improvement largely independent from other import-related proposals, but it can have effect on some other RFCs.
+
+いくつかのRFCでは現在クレートの絶対パスと他のクレートからのパスのための新しい構文を提案している.  
+Some RFCs propose new syntaxes for absolute paths in the current crate and paths from other crates.
+
+それらの提案でのいくつかの議論は使用統計(他のクレートからのインポートがより一般的、なのか、現在のクレートからのインポートがより一般的なのか)にもとづいている.  
+より一般的なインポートがうるさくない(verboseではない)構文のほうがよい
+> 使用統計が謎い ("imports from other crates are more common" or "imports from the current crate are more common". )
+
+共通のプレフィックスを持つ全てのインポートを冗長で無くすることで、このRFCではそれら統計をthe equationから削除した
+> This RFC removes these statistics from the equation by reducing verbosity for all imports with common prefix.
+
+例として、`A`, `B`, `C`の冗長性の差は最小限であり、インポートの数に依存していない.
+
+```rust
+// A
+use extern::{
+    a::b::c,
+    d::e::f,
+    g::h::i,
+};
+// B
+use crate::{
+    a::b::c,
+    d::e::f,
+    g::h::i,
+};
+// C
+use {
+    a::b::c,
+    d::e::f,
+    g::h::i,
+};
+```
+
+
+# Drawbacks
+(必須ではないが)、この機能は単一インポートを複数行でフォーマットすることを推奨する
+
+```rust
+use prefix::{
+    MyName,
+    x::YourName,
+    y::Surname,
+};
+```
+
+このフォーマットにすると、`use.*MyName`でgrepするのが難しくなる
+
+
+# 根拠と代替案
+現状維持が常に代替案
+
+
+
+# 未解決の問題
+今のところ無い

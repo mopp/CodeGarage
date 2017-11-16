@@ -97,17 +97,14 @@ mod tests {
         static SIZE: usize = 1024;
         let nodes: *mut Frame = allocate_nodes(SIZE);
 
-        let frame1 = unsafe {&mut *nodes.offset(0) as &mut Frame};
-        let frame2 = unsafe {&mut *nodes.offset(1) as &mut Frame};
-        let frame3 = unsafe {&mut *nodes.offset(2) as &mut Frame};
-        frame1.init_link();
-        frame2.init_link();
-        frame3.init_link();
+        let frame = unsafe {&mut *nodes.offset(0) as &mut Frame};
+        frame.init_link();
+        for i in 1..SIZE  {
+            let f = unsafe {&mut *nodes.offset(i as isize) as &mut Frame};
+            f.init_link();
+            frame.insert_next(Shared::from(f));
+        }
 
-        assert_eq!(frame1.length(), 1);
-
-        frame1.insert_next(Shared::from(frame2));
-        frame1.insert_next(Shared::from(frame3));
-        assert_eq!(frame1.length(), 3);
+        assert_eq!(frame.length(), SIZE);
     }
 }

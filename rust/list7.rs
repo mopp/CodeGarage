@@ -3,10 +3,10 @@
 #![cfg_attr(test, feature(allocator_api))]
 
 use std::ptr::Shared;
+use std::ptr;
 
 pub trait Node<T: Node<T>> {
     fn as_ptr(&mut self) -> *mut T;
-    fn as_ptr_n(&self) -> *const T;
     fn set_next(&mut self, Shared<T>);
     fn set_prev(&mut self, Shared<T>);
     fn next(&self) -> &T;
@@ -26,16 +26,17 @@ pub trait Node<T: Node<T>> {
         self.set_prev(s);
     }
 
-    fn length(&mut self) -> usize {
-        fn find_last<T>(current: &T, target: *const T, count: usize) -> usize {
-            if current.as_ptr_n() == target {
-                count
-            } else {
-                find_last(current.next(), target, count + 1)
-            }
+    fn length(&self) -> usize {
+        let tail = self.prev();
+        let mut current = self.next().prev();
+
+        let mut count = 1;
+        while ptr::eq(current as _, tail as _) == false {
+            count += 1;
+            current = current.next();
         }
 
-        find_last(self.next(), self.prev().as_ptr_n(), 1)
+        count
     }
 
     fn insert_next(&mut self, mut new_next: Shared<T>) {
@@ -46,8 +47,8 @@ pub trait Node<T: Node<T>> {
         unsafe {
             {
                 let new_next = new_next.as_mut();
-                new_next.set_next(self.as_shared());
-                new_next.set_prev(self.next().into())
+                new_next.set_next(self.next().into());
+                new_next.set_prev(self.as_shared())
             }
             self.next_mut().set_prev(new_next);
             self.set_next(new_next);
@@ -73,10 +74,6 @@ mod tests {
             self as *mut _
         }
 
-        fn as_ptr_n(&self) -> *const Frame {
-            self as *const _
-        }
-
         fn set_next(&mut self, s: Shared<Frame>) {
             self.next = s;
         }
@@ -93,12 +90,12 @@ mod tests {
             unsafe {self.next.as_mut()}
         }
 
-        fn prev_mut(&mut self) -> &mut Frame {
-            unsafe {self.prev.as_mut()}
-        }
-
         fn prev(&self) -> &Frame {
             unsafe {self.prev.as_ref()}
+        }
+
+        fn prev_mut(&mut self) -> &mut Frame {
+            unsafe {self.prev.as_mut()}
         }
     }
 
@@ -118,10 +115,13 @@ mod tests {
 
         let frame = unsafe {&mut *nodes.offset(0) as &mut Frame};
         frame.init_link();
+        assert_eq!(frame.length(), 1);
+
         for i in 1..SIZE  {
             let f = unsafe {&mut *nodes.offset(i as isize) as &mut Frame};
-            f.init_link();
-            frame.insert_next(Shared::from(f));
+            let s = Shared::from(f);
+            frame.insert_next(s);
+            assert_eq!(frame.length(), 1 + i);
         }
 
         assert_eq!(frame.length(), SIZE);

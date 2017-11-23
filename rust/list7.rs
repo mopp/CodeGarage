@@ -48,6 +48,24 @@ pub trait Node<T: Node<T>> {
         self.init_link();
     }
 
+    // TODO: use iterator.
+    fn find<F>(&mut self, f: F) -> Option<Shared<T>> where F: Fn(&T) -> bool {
+        let tail = self.prev_mut().as_shared();
+        let mut current = self.next_mut().prev_mut().as_shared();
+
+        while ptr::eq(current.as_ptr(), tail.as_ptr()) == false {
+            if f(unsafe {current.as_ref()}) {
+                return Some(current);
+            }
+
+            unsafe {
+                current = current.as_mut().next_mut().as_shared();
+            }
+        }
+
+        None
+    }
+
     fn insert_next(&mut self, mut new_next: Shared<T>) {
         if self.as_ptr() == new_next.as_ptr() {
             return;
@@ -137,6 +155,11 @@ mod tests {
             &mut *nodes.offset(i as isize) as &mut Frame
         };
 
+        for i in 0..SIZE {
+            let f = get_ith_frame(i);
+            f.number = i;
+        }
+
         let frame = get_ith_frame(0);
         frame.init_link();
         assert_eq!(frame.length(), 1);
@@ -150,8 +173,19 @@ mod tests {
 
         assert_eq!(frame.length(), SIZE);
 
-        let f = get_ith_frame(10);
-        f.detach();
-        assert_eq!(frame.length(), SIZE - 1);
+        {
+            // missing ?
+            let f = get_ith_frame(10);
+            f.detach();
+            assert_eq!(frame.length(), SIZE - 1);
+        }
+
+        assert_eq!(frame.find(|_| false).is_none(), true);
+        let r = frame.find(|n| n.number == 100);
+
+        unsafe {
+            assert_eq!(r.is_some(), true);
+            assert_eq!(r.unwrap().as_ref().number, 100);
+        }
     }
 }

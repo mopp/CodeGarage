@@ -34,6 +34,14 @@ pub trait Node {
         self.count_until(self.prev(), 1)
     }
 
+    fn detach(&mut self) {
+        if self.is_self(self.next()) && self.is_self(self.prev()) {
+            // already detached.
+            return;
+        }
+        // TODO:
+    }
+
     fn insert_next(&mut self, mut new_next: Shared<Self>) {
         if self.is_self(&new_next) {
             return;
@@ -96,18 +104,17 @@ mod tests {
     fn test_usage() {
         static SIZE: usize = 1024;
         let nodes: *mut Frame = allocate_nodes(SIZE);
+        let get_ith_frame = |i: usize| {
+            = unsafe {&mut *nodes.offset(i as isize) as &mut Frame};
+        };
 
-        let frame1 = unsafe {&mut *nodes.offset(0) as &mut Frame};
-        let frame2 = unsafe {&mut *nodes.offset(1) as &mut Frame};
-        let frame3 = unsafe {&mut *nodes.offset(2) as &mut Frame};
-        frame1.init_link();
-        frame2.init_link();
-        frame3.init_link();
+        frame.init_link();
+        for i in 1..SIZE  {
+            let f = unsafe {&mut *nodes.offset(i as isize) as &mut Frame};
+            f.init_link();
+            frame.insert_next(Shared::from(f));
+        }
 
-        assert_eq!(frame1.length(), 1);
-
-        frame1.insert_next(Shared::from(frame2));
-        frame1.insert_next(Shared::from(frame3));
-        assert_eq!(frame1.length(), 3);
+        assert_eq!(frame.length(), SIZE);
     }
 }

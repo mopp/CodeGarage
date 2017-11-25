@@ -39,6 +39,14 @@ pub trait Node<T: Node<T>> {
         count
     }
 
+    fn is_alone(&self) -> bool {
+        let prev = self.prev();
+        let next = self.next();
+        let current = self.next().prev();
+
+        ptr::eq(current as _, prev as _) && ptr::eq(current as _, next as _)
+    }
+
     fn detach(&mut self) {
         let prev = self.prev().into();
         let next = self.next().into();
@@ -90,19 +98,13 @@ pub trait Node<T: Node<T>> {
 
 pub struct List<T: Node<T>> {
     node: Option<Shared<T>>,
-    length: usize,
 }
 
 impl<T: Node<T>> List<T> {
     pub fn new() -> List<T> {
         List {
             node: None,
-            length: 0,
         }
-    }
-
-    pub fn length(&self) -> usize {
-        self.length
     }
 
     pub fn push(&mut self, new_node: Shared<T>, is_next: bool) {
@@ -117,8 +119,6 @@ impl<T: Node<T>> List<T> {
         } else {
             self.node = Some(new_node);
         }
-
-        self.length += 1;
     }
 
     pub fn push_head(&mut self, new_node: Shared<T>) {
@@ -132,7 +132,7 @@ impl<T: Node<T>> List<T> {
     fn pop(&mut self, is_next: bool) -> Option<Shared<T>> {
         self.node
             .map(|mut node| {
-                if self.length == 1 {
+                if unsafe {node.as_ref().is_alone()} {
                     self.node = None;
                 } else {
                     let node = unsafe {node.as_mut()};
@@ -143,8 +143,6 @@ impl<T: Node<T>> List<T> {
                         }.as_shared());
                     node.detach();
                 }
-
-                self.length -= 1;
 
                 node
             })
@@ -205,7 +203,8 @@ mod tests {
     const MAX_ORDER: usize = 15;
 
     struct BuddyManager {
-        frame_lists: [List<Frame>; MAX_ORDER]
+        frame_lists: [List<Frame>; MAX_ORDER],
+        frame_counts: [usize; MAX_ORDER],
     }
 
     impl BuddyManager {
@@ -214,6 +213,8 @@ mod tests {
             for f in frame_lists.iter_mut() {
                 *f = List::new();
             }
+
+            let mut frame_counts = [0; MAX_ORDER];
 
             // Init all frames.
             for i in 0..frame_count {
@@ -232,12 +233,14 @@ mod tests {
                     let target_frame = unsafe {Shared::new_unchecked(frames.offset(index as isize))};
                     frame_lists[order].push_tail(target_frame);
 
+                    frame_counts[order] += 1;
                     index += frame_count_in_order;
                 }
             }
 
             BuddyManager {
-                frame_lists: frame_lists
+                frame_lists: frame_lists,
+                frame_counts: frame_counts,
             }
         }
 
@@ -248,6 +251,8 @@ mod tests {
                         continue;
                     },
                     Some(mut shared_frame) => {
+                        self.frame_counts[order] -= 1;
+
                         if request_order < order {
                             unsafe {shared_frame.as_mut().order = request_order};
                         }
@@ -261,6 +266,7 @@ mod tests {
                                 buddy_frame.as_mut().init_link();
                                 buddy_frame.as_mut().order = i;
                                 self.frame_lists[i].push_tail(buddy_frame);
+                                self.frame_counts[i] += 1;
                             }
                         }
 
@@ -332,16 +338,16 @@ mod tests {
         let frames: *mut Frame = allocate_nodes(SIZE);
 
         let mut bman = BuddyManager::new(frames, SIZE);
-        assert_eq!(bman.frame_lists[10].length(), 1);
-        assert_eq!(bman.frame_lists[3].length(), 1);
-        assert_eq!(bman.frame_lists[0].length(), 1);
+        assert_eq!(bman.frame_counts[10], 1);
+        assert_eq!(bman.frame_counts[3], 1);
+        assert_eq!(bman.frame_counts[0], 1);
 
         assert_eq!(bman.alloc(0).is_some(), true);
-        assert_eq!(bman.frame_lists[0].length(), 0);
+        assert_eq!(bman.frame_counts[0], 0);
 
         assert_eq!(bman.alloc(0).is_some(), true);
-        assert_eq!(bman.frame_lists[0].length(), 1);
-        assert_eq!(bman.frame_lists[1].length(), 1);
-        assert_eq!(bman.frame_lists[2].length(), 1);
+        assert_eq!(bman.frame_counts[0], 1);
+        assert_eq!(bman.frame_counts[1], 1);
+        assert_eq!(bman.frame_counts[2], 1);
     }
 }

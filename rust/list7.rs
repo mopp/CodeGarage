@@ -104,7 +104,7 @@ mod tests {
     struct Frame {
         next: Shared<Frame>,
         prev: Shared<Frame>,
-        number: usize,
+        order: usize,
     }
 
     impl Node<Frame> for Frame {
@@ -137,6 +137,98 @@ mod tests {
         }
     }
 
+    const MAX_ORDER: usize = 15;
+
+    struct BuddyManager {
+        frame_lists: [Option<Shared<Frame>>; MAX_ORDER],
+        frame_counts: [usize; MAX_ORDER],
+    }
+
+    impl BuddyManager {
+        pub fn new(frames: *mut Frame, frame_count: usize) -> BuddyManager {
+            let mut frame_lists: [Option<Shared<Frame>>; MAX_ORDER] = unsafe {mem::uninitialized()};
+            for f in frame_lists.iter_mut() {
+                *f = None;
+            }
+            let mut frame_counts = [0; MAX_ORDER];
+
+            // Init all frames.
+            for i in 0..frame_count {
+                let f = unsafe {&mut *frames.offset(i as isize) as &mut Frame};
+                f.init_link();
+            }
+
+            let mut index = 0usize;
+            for order in (0..MAX_ORDER).rev() {
+                let frame_count_in_order = 1 << order;
+                loop {
+                    if (frame_count - index) < frame_count_in_order {
+                        break;
+                    }
+
+                    let target_frame = unsafe {Shared::new_unchecked(frames.offset(index as isize))};
+                    if let Some(mut f) = frame_lists[order] {
+                        unsafe { f.as_mut().insert_next(target_frame); }
+                    } else  {
+                        // Set head.
+                        frame_lists[order] = Some(target_frame);
+                    }
+
+                    frame_counts[order] += 1;
+                    index += frame_count_in_order;
+                }
+            }
+
+            BuddyManager {
+                frame_lists: frame_lists,
+                frame_counts: frame_counts,
+            }
+        }
+
+        pub fn alloc(&mut self, request_order: usize) -> Option<Shared<Frame>> {
+            for order in request_order..MAX_ORDER {
+                let count = self.frame_counts[order];
+
+                if count == 0 {
+                    continue;
+                } else if count == 1 {
+                    let Some(mut frames) = self.frame_lists[order];
+                    self.frame_lists[order] = None;
+
+                    if request_order < order {
+                        // Push back extra frames.
+                        for i in (request_order..order) {
+                            unsafe {
+                                let ptr = frames.as_ptr();
+                                let buddy_ptr = ptr ^ (1 << i);
+                                let buddy_frame = Shared::new_unchecked(buddy_ptr);
+                                self.frame_lists[i].insert_prev(buddy_frame);
+                                self.frame_counts[i] += 1;
+                            }
+                        }
+                    }
+
+                    return Some(frames);
+                } else {
+                }
+
+                if let Some(mut frames) = self.frame_lists[order] {
+                    if self.frame_counts[order] == 1 {
+                        self.frame_lists[order] = None;
+                        return Some(frames);
+                    } else {
+                        unsafe { self.frame_lists[order] = Some(frames.as_mut().next_mut().as_shared()) };
+                        return Some(frames);
+                    }
+                } else {
+                    continue;
+                }
+            }
+
+            None
+        }
+    }
+
     fn allocate_nodes<T>(count: usize) -> *mut T {
         let type_size = mem::size_of::<T>();
         let align     = mem::align_of::<T>();
@@ -156,7 +248,7 @@ mod tests {
 
         for i in 0..SIZE {
             let f = get_ith_frame(i);
-            f.number = i;
+            f.order = i;
         }
 
         let frame = get_ith_frame(0);
@@ -180,11 +272,24 @@ mod tests {
         }
 
         assert_eq!(frame.find(|_| false).is_none(), true);
-        let r = frame.find(|n| n.number == 100);
+        let r = frame.find(|n| n.order == 100);
 
         unsafe {
             assert_eq!(r.is_some(), true);
-            assert_eq!(r.unwrap().as_ref().number, 100);
+            assert_eq!(r.unwrap().as_ref().order, 100);
         }
+    }
+
+    #[test]
+    fn test_buddy_manager() {
+        // 1,2,4,8,16,32,64
+        static SIZE: usize = 1024 + (1 + 8);
+        println!("{}", SIZE);
+        let frames: *mut Frame = allocate_nodes(SIZE);
+
+        let bman = BuddyManager::new(frames, SIZE);
+        assert_eq!(bman.frame_counts[10], 1);
+        assert_eq!(bman.frame_counts[3], 1);
+        assert_eq!(bman.frame_counts[0], 1);
     }
 }

@@ -48,7 +48,6 @@ pub trait Node<T: Node<T>> {
         self.init_link();
     }
 
-    // TODO: use iterator.
     fn find<F>(&mut self, f: F) -> Option<Shared<T>> where F: Fn(&T) -> bool {
         let tail = self.prev_mut().as_shared();
         let mut current = self.next_mut().prev_mut().as_shared();

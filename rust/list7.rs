@@ -244,33 +244,36 @@ mod tests {
             }
         }
 
+        fn get_buddy_frame(&self, f: Shared<Frame>, order: usize) -> Shared<Frame> {
+            // TODO: check boundary.
+            let buddy_ptr = (f.as_ptr() as usize) ^ (1 << order);
+            unsafe { Shared::new_unchecked(buddy_ptr as _) }
+        }
+
         pub fn alloc(&mut self, request_order: usize) -> Option<Shared<Frame>> {
             for order in request_order..MAX_ORDER {
                 match self.frame_lists[order].pop_head() {
                     None => {
                         continue;
                     },
-                    Some(mut shared_frame) => {
+                    Some(mut frame) => {
                         self.frame_counts[order] -= 1;
 
                         if request_order < order {
-                            unsafe {shared_frame.as_mut().order = request_order};
+                            unsafe {frame.as_mut().order = request_order};
                         }
 
                         // Push extra frames.
                         for i in request_order..order {
                             unsafe {
-                                let ptr = shared_frame.as_ptr();
-                                let buddy_ptr = (ptr as usize) ^ (1 << i);
-                                let mut buddy_frame: Shared<Frame> = Shared::new_unchecked(buddy_ptr as _);
-                                buddy_frame.as_mut().init_link();
+                                let mut buddy_frame = self.get_buddy_frame(frame, i);
                                 buddy_frame.as_mut().order = i;
                                 self.frame_lists[i].push_tail(buddy_frame);
                                 self.frame_counts[i] += 1;
                             }
                         }
 
-                        return Some(shared_frame);
+                        return Some(frame);
                     },
                 }
             }

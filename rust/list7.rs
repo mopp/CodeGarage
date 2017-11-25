@@ -191,38 +191,39 @@ mod tests {
 
                 if count == 0 {
                     continue;
-                } else if count == 1 {
-                    let Some(mut frames) = self.frame_lists[order];
-                    self.frame_lists[order] = None;
+                }
 
-                    if request_order < order {
-                        // Push back extra frames.
-                        for i in (request_order..order) {
-                            unsafe {
-                                let ptr = frames.as_ptr();
-                                let buddy_ptr = ptr ^ (1 << i);
-                                let buddy_frame = Shared::new_unchecked(buddy_ptr);
-                                self.frame_lists[i].insert_prev(buddy_frame);
-                                self.frame_counts[i] += 1;
+                let mut frames = self.frame_lists[order].unwrap();
+                self.frame_counts[order] -= 1;
+
+                if count == 1 {
+                    self.frame_lists[order] = None;
+                } else {
+                    unsafe {
+                        let f = frames.as_mut();
+                        self.frame_lists[order] = Some(f.next_mut().as_shared());
+                        f.detach();
+                    }
+                }
+
+                if request_order < order {
+                    // Push back extra frames.
+                    for i in request_order..order {
+                        unsafe {
+                            let ptr = frames.as_ptr();
+                            let buddy_ptr = (ptr as usize) ^ (1 << i);
+                            let buddy_frame = Shared::new_unchecked(buddy_ptr as _);
+                            if let Some(mut fs) = self.frame_lists[i] {
+                                fs.as_mut().insert_prev(buddy_frame);
+                            } else {
+                                self.frame_lists[i] = Some(buddy_frame);
                             }
+                            self.frame_counts[i] += 1;
                         }
                     }
-
-                    return Some(frames);
-                } else {
                 }
 
-                if let Some(mut frames) = self.frame_lists[order] {
-                    if self.frame_counts[order] == 1 {
-                        self.frame_lists[order] = None;
-                        return Some(frames);
-                    } else {
-                        unsafe { self.frame_lists[order] = Some(frames.as_mut().next_mut().as_shared()) };
-                        return Some(frames);
-                    }
-                } else {
-                    continue;
-                }
+                return Some(frames);
             }
 
             None
@@ -287,9 +288,17 @@ mod tests {
         println!("{}", SIZE);
         let frames: *mut Frame = allocate_nodes(SIZE);
 
-        let bman = BuddyManager::new(frames, SIZE);
+        let mut bman = BuddyManager::new(frames, SIZE);
         assert_eq!(bman.frame_counts[10], 1);
         assert_eq!(bman.frame_counts[3], 1);
         assert_eq!(bman.frame_counts[0], 1);
+
+        assert_eq!(bman.alloc(0).is_some(), true);
+        assert_eq!(bman.frame_counts[0], 0);
+
+        assert_eq!(bman.alloc(0).is_some(), true);
+        assert_eq!(bman.frame_counts[0], 1);
+        assert_eq!(bman.frame_counts[1], 1);
+        assert_eq!(bman.frame_counts[2], 1);
     }
 }

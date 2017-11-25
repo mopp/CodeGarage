@@ -94,6 +94,77 @@ pub trait Node<T: Node<T>> {
     }
 }
 
+pub struct List<T: Node<T>> {
+    node: Option<Shared<T>>,
+    length: usize,
+}
+
+impl<T: Node<T>> List<T> {
+    pub fn new() -> List<T> {
+        List {
+            node: None,
+            length: 0,
+        }
+    }
+
+    pub fn length(&self) -> usize {
+        self.length
+    }
+
+    pub fn push(&mut self, new_node: Shared<T>, is_next: bool) {
+        if let Some(mut node) = self.node {
+            unsafe {
+                if is_next {
+                    node.as_mut().insert_next(new_node);
+                } else {
+                    node.as_mut().insert_prev(new_node);
+                }
+            }
+        } else {
+            self.node = Some(new_node);
+        }
+
+        self.length += 1;
+    }
+
+    pub fn push_head(&mut self, new_node: Shared<T>) {
+        self.push(new_node, true);
+    }
+
+    pub fn push_tail(&mut self, new_node: Shared<T>) {
+        self.push(new_node, false);
+    }
+
+    fn pop(&mut self, is_next: bool) -> Option<Shared<T>> {
+        self.node
+            .map(|mut node| {
+                if self.length == 1 {
+                    self.node = None;
+                } else {
+                    let node = unsafe {node.as_mut()};
+                    self.node =
+                        Some(match is_next {
+                            true => node.next_mut(),
+                            false => node.prev_mut(),
+                        }.as_shared());
+                    node.detach();
+                }
+
+                self.length -= 1;
+
+                node
+            })
+    }
+
+    pub fn pop_head(&mut self) -> Option<Shared<T>> {
+        self.pop(true)
+    }
+
+    pub fn pop_tail(&mut self) -> Option<Shared<T>> {
+        self.pop(false)
+    }
+}
+
 
 #[cfg(test)]
 mod tests {
@@ -140,17 +211,15 @@ mod tests {
     const MAX_ORDER: usize = 15;
 
     struct BuddyManager {
-        frame_lists: [Option<Shared<Frame>>; MAX_ORDER],
-        frame_counts: [usize; MAX_ORDER],
+        frame_lists: [List<Frame>; MAX_ORDER]
     }
 
     impl BuddyManager {
         pub fn new(frames: *mut Frame, frame_count: usize) -> BuddyManager {
-            let mut frame_lists: [Option<Shared<Frame>>; MAX_ORDER] = unsafe {mem::uninitialized()};
+            let mut frame_lists: [List<Frame>; MAX_ORDER] = unsafe {mem::uninitialized()};
             for f in frame_lists.iter_mut() {
-                *f = None;
+                *f = List::new();
             }
-            let mut frame_counts = [0; MAX_ORDER];
 
             // Init all frames.
             for i in 0..frame_count {
@@ -167,63 +236,43 @@ mod tests {
                     }
 
                     let target_frame = unsafe {Shared::new_unchecked(frames.offset(index as isize))};
-                    if let Some(mut f) = frame_lists[order] {
-                        unsafe { f.as_mut().insert_next(target_frame); }
-                    } else  {
-                        // Set head.
-                        frame_lists[order] = Some(target_frame);
-                    }
+                    frame_lists[order].push_tail(target_frame);
 
-                    frame_counts[order] += 1;
                     index += frame_count_in_order;
                 }
             }
 
             BuddyManager {
-                frame_lists: frame_lists,
-                frame_counts: frame_counts,
+                frame_lists: frame_lists
             }
         }
 
         pub fn alloc(&mut self, request_order: usize) -> Option<Shared<Frame>> {
             for order in request_order..MAX_ORDER {
-                let count = self.frame_counts[order];
-
-                if count == 0 {
-                    continue;
-                }
-
-                let mut frames = self.frame_lists[order].unwrap();
-                self.frame_counts[order] -= 1;
-
-                if count == 1 {
-                    self.frame_lists[order] = None;
-                } else {
-                    unsafe {
-                        let f = frames.as_mut();
-                        self.frame_lists[order] = Some(f.next_mut().as_shared());
-                        f.detach();
-                    }
-                }
-
-                if request_order < order {
-                    // Push back extra frames.
-                    for i in request_order..order {
-                        unsafe {
-                            let ptr = frames.as_ptr();
-                            let buddy_ptr = (ptr as usize) ^ (1 << i);
-                            let buddy_frame = Shared::new_unchecked(buddy_ptr as _);
-                            if let Some(mut fs) = self.frame_lists[i] {
-                                fs.as_mut().insert_prev(buddy_frame);
-                            } else {
-                                self.frame_lists[i] = Some(buddy_frame);
-                            }
-                            self.frame_counts[i] += 1;
+                match self.frame_lists[order].pop_head() {
+                    None => {
+                        continue;
+                    },
+                    Some(mut shared_frame) => {
+                        if request_order < order {
+                            unsafe {shared_frame.as_mut().order = request_order};
                         }
-                    }
-                }
 
-                return Some(frames);
+                        // Push extra frames.
+                        for i in request_order..order {
+                            unsafe {
+                                let ptr = shared_frame.as_ptr();
+                                let buddy_ptr = (ptr as usize) ^ (1 << i);
+                                let mut buddy_frame: Shared<Frame> = Shared::new_unchecked(buddy_ptr as _);
+                                buddy_frame.as_mut().init_link();
+                                buddy_frame.as_mut().order = i;
+                                self.frame_lists[i].push_tail(buddy_frame);
+                            }
+                        }
+
+                        return Some(shared_frame);
+                    },
+                }
             }
 
             None
@@ -289,16 +338,16 @@ mod tests {
         let frames: *mut Frame = allocate_nodes(SIZE);
 
         let mut bman = BuddyManager::new(frames, SIZE);
-        assert_eq!(bman.frame_counts[10], 1);
-        assert_eq!(bman.frame_counts[3], 1);
-        assert_eq!(bman.frame_counts[0], 1);
+        assert_eq!(bman.frame_lists[10].length(), 1);
+        assert_eq!(bman.frame_lists[3].length(), 1);
+        assert_eq!(bman.frame_lists[0].length(), 1);
 
         assert_eq!(bman.alloc(0).is_some(), true);
-        assert_eq!(bman.frame_counts[0], 0);
+        assert_eq!(bman.frame_lists[0].length(), 0);
 
         assert_eq!(bman.alloc(0).is_some(), true);
-        assert_eq!(bman.frame_counts[0], 1);
-        assert_eq!(bman.frame_counts[1], 1);
-        assert_eq!(bman.frame_counts[2], 1);
+        assert_eq!(bman.frame_lists[0].length(), 1);
+        assert_eq!(bman.frame_lists[1].length(), 1);
+        assert_eq!(bman.frame_lists[2].length(), 1);
     }
 }

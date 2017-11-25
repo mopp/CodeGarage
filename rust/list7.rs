@@ -66,29 +66,23 @@ pub trait Node<T: Node<T>> {
     }
 
     fn insert_next(&mut self, mut new_next: Shared<T>) {
-        if self.as_ptr() == new_next.as_ptr() {
-            return;
-        }
-
         {
             let new_next = unsafe { new_next.as_mut() };
             new_next.set_next(self.next().into());
             new_next.set_prev(self.as_shared())
         }
+
         self.next_mut().set_prev(new_next);
         self.set_next(new_next);
     }
 
     fn insert_prev(&mut self, mut new_prev: Shared<T>) {
-        if self.as_ptr() == new_prev.as_ptr() {
-            return;
-        }
-
         {
             let new_prev = unsafe { new_prev.as_mut() };
             new_prev.set_next(self.as_shared());
             new_prev.set_prev(self.prev().into());
         }
+
         self.prev_mut().set_next(new_prev);
         self.set_prev(new_prev);
     }

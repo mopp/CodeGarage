@@ -251,17 +251,20 @@ mod tests {
         }
 
         pub fn alloc(&mut self, request_order: usize) -> Option<Shared<Frame>> {
+            // find last set instruction makes it more accelerate ?
+            // 0001 1000
+            // fls(map >> request_order) ?
             for order in request_order..MAX_ORDER {
                 match self.frame_lists[order].pop_head() {
                     None => {
                         continue;
                     },
-                    Some(mut frame) => {
+                    Some(mut frame) if request_order < order => {
                         self.frame_counts[order] -= 1;
 
-                        if request_order < order {
-                            unsafe {frame.as_mut().order = request_order};
-                        }
+                        unsafe {
+                            frame.as_mut().order = request_order
+                        };
 
                         // Push extra frames.
                         for i in request_order..order {
@@ -274,6 +277,10 @@ mod tests {
                         }
 
                         return Some(frame);
+                    },
+                    frame => {
+                        self.frame_counts[order] -= 1;
+                        return frame;
                     },
                 }
             }

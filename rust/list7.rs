@@ -15,9 +15,7 @@ pub trait Node<T: Node<T>> {
     fn prev_mut(&mut self) -> &mut T;
 
     fn as_shared(&mut self) -> Shared<T> {
-        unsafe {
-            Shared::new_unchecked(self.as_ptr())
-        }
+        unsafe { Shared::new_unchecked(self.as_ptr()) }
     }
 
     fn init_link(&mut self) {
@@ -56,12 +54,15 @@ pub trait Node<T: Node<T>> {
         self.init_link();
     }
 
-    fn find<F>(&mut self, f: F) -> Option<Shared<T>> where F: Fn(&T) -> bool {
+    fn find<F>(&mut self, f: F) -> Option<Shared<T>>
+    where
+        F: Fn(&T) -> bool,
+    {
         let tail = self.prev_mut().as_shared();
         let mut current = self.next_mut().prev_mut().as_shared();
 
         while ptr::eq(current.as_ptr(), tail.as_ptr()) == false {
-            if f(unsafe {current.as_ref()}) {
+            if f(unsafe { current.as_ref() }) {
                 return Some(current);
             }
 
@@ -102,9 +103,7 @@ pub struct List<T: Node<T>> {
 
 impl<T: Node<T>> List<T> {
     pub fn new() -> List<T> {
-        List {
-            node: None,
-        }
+        List { node: None }
     }
 
     pub fn push(&mut self, new_node: Shared<T>, is_next: bool) {
@@ -130,22 +129,22 @@ impl<T: Node<T>> List<T> {
     }
 
     fn pop(&mut self, is_next: bool) -> Option<Shared<T>> {
-        self.node
-            .map(|mut node| {
-                if unsafe {node.as_ref().is_alone()} {
-                    self.node = None;
-                } else {
-                    let node = unsafe {node.as_mut()};
-                    self.node =
-                        Some(match is_next {
-                            true => node.next_mut(),
-                            false => node.prev_mut(),
-                        }.as_shared());
-                    node.detach();
-                }
+        self.node.map(|mut node| {
+            if unsafe { node.as_ref().is_alone() } {
+                self.node = None;
+            } else {
+                let node = unsafe { node.as_mut() };
+                self.node = Some(
+                    match is_next {
+                        true => node.next_mut(),
+                        false => node.prev_mut(),
+                    }.as_shared(),
+                );
+                node.detach();
+            }
 
-                node
-            })
+            node
+        })
     }
 
     pub fn pop_head(&mut self) -> Option<Shared<T>> {
@@ -161,7 +160,7 @@ impl<T: Node<T>> List<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::heap::{Alloc, System, Layout};
+    use std::heap::{Alloc, Layout, System};
     use std::mem;
 
     struct Frame {
@@ -184,19 +183,19 @@ mod tests {
         }
 
         fn next(&self) -> &Frame {
-            unsafe {self.next.as_ref()}
+            unsafe { self.next.as_ref() }
         }
 
         fn next_mut(&mut self) -> &mut Frame {
-            unsafe {self.next.as_mut()}
+            unsafe { self.next.as_mut() }
         }
 
         fn prev(&self) -> &Frame {
-            unsafe {self.prev.as_ref()}
+            unsafe { self.prev.as_ref() }
         }
 
         fn prev_mut(&mut self) -> &mut Frame {
-            unsafe {self.prev.as_mut()}
+            unsafe { self.prev.as_mut() }
         }
     }
 
@@ -209,7 +208,7 @@ mod tests {
 
     impl BuddyManager {
         pub fn new(frames: *mut Frame, frame_count: usize) -> BuddyManager {
-            let mut frame_lists: [List<Frame>; MAX_ORDER] = unsafe {mem::uninitialized()};
+            let mut frame_lists: [List<Frame>; MAX_ORDER] = unsafe { mem::uninitialized() };
             for f in frame_lists.iter_mut() {
                 *f = List::new();
             }
@@ -218,7 +217,7 @@ mod tests {
 
             // Init all frames.
             for i in 0..frame_count {
-                let f = unsafe {&mut *frames.offset(i as isize) as &mut Frame};
+                let f = unsafe { &mut *frames.offset(i as isize) as &mut Frame };
                 f.init_link();
             }
 
@@ -230,7 +229,8 @@ mod tests {
                         break;
                     }
 
-                    let target_frame = unsafe {Shared::new_unchecked(frames.offset(index as isize))};
+                    let target_frame =
+                        unsafe { Shared::new_unchecked(frames.offset(index as isize)) };
                     frame_lists[order].push_tail(target_frame);
 
                     frame_counts[order] += 1;
@@ -258,13 +258,11 @@ mod tests {
                 match self.frame_lists[order].pop_head() {
                     None => {
                         continue;
-                    },
+                    }
                     Some(mut frame) if request_order < order => {
                         self.frame_counts[order] -= 1;
 
-                        unsafe {
-                            frame.as_mut().order = request_order
-                        };
+                        unsafe { frame.as_mut().order = request_order };
 
                         // Push extra frames.
                         for i in request_order..order {
@@ -277,11 +275,11 @@ mod tests {
                         }
 
                         return Some(frame);
-                    },
+                    }
                     frame => {
                         self.frame_counts[order] -= 1;
                         return frame;
-                    },
+                    }
                 }
             }
 
@@ -291,8 +289,8 @@ mod tests {
 
     fn allocate_nodes<T>(count: usize) -> *mut T {
         let type_size = mem::size_of::<T>();
-        let align     = mem::align_of::<T>();
-        let layout    = Layout::from_size_align(count * type_size, align).unwrap();
+        let align = mem::align_of::<T>();
+        let layout = Layout::from_size_align(count * type_size, align).unwrap();
         let ptr = unsafe { System.alloc(layout) }.unwrap();
 
         ptr as _
@@ -302,9 +300,7 @@ mod tests {
     fn test_usage() {
         static SIZE: usize = 1024;
         let nodes: *mut Frame = allocate_nodes(SIZE);
-        let get_ith_frame = |i: usize| unsafe {
-            &mut *nodes.offset(i as isize) as &mut Frame
-        };
+        let get_ith_frame = |i: usize| unsafe { &mut *nodes.offset(i as isize) as &mut Frame };
 
         for i in 0..SIZE {
             let f = get_ith_frame(i);
@@ -315,7 +311,7 @@ mod tests {
         frame.init_link();
         assert_eq!(frame.length(), 1);
 
-        for i in 1..SIZE  {
+        for i in 1..SIZE {
             let f = get_ith_frame(i);
             let s = Shared::from(f);
             frame.insert_next(s);

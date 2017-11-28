@@ -167,6 +167,7 @@ mod tests {
         next: Shared<Frame>,
         prev: Shared<Frame>,
         order: usize,
+        is_alloc: bool,
     }
 
     impl Node<Frame> for Frame {
@@ -202,6 +203,8 @@ mod tests {
     const MAX_ORDER: usize = 15;
 
     struct BuddyManager {
+        frame_ptr: *mut Frame,
+        frame_count: usize,
         frame_lists: [List<Frame>; MAX_ORDER],
         free_frame_counts: [usize; MAX_ORDER],
     }
@@ -244,12 +247,24 @@ mod tests {
             }
 
             BuddyManager {
+                frame_ptr: frames,
+                frame_count: frame_count,
                 frame_lists: frame_lists,
                 free_frame_counts: free_frame_counts,
             }
         }
 
-        fn get_buddy_frame(&self, f: Shared<Frame>, order: usize) -> Shared<Frame> {
+        fn get_buddy_frame(&self, f: Shared<Frame>, order: usize) -> Option<Shared<Frame>> {
+            let head_addr = self.frame_ptr as usize;
+            let tail_addr = self.frame_ptr.offset(self.frame_count as isize) as usize;
+
+            debug_assert!(addr < head_addr, "Invalid frame is given");
+            debug_assert!(tail_addr < addr, "Invalid frame is given");
+
+            let addr = f.as_ptr() as usize;
+            if (addr <= head_addr) || (tail_addr <= addr) {
+            }
+
             // TODO: check boundary.
             let buddy_ptr = (f.as_ptr() as usize) ^ (1 << order);
             unsafe { Shared::new_unchecked(buddy_ptr as _) }
@@ -291,6 +306,16 @@ mod tests {
             None
         }
 
+        pub fn free(&mut self, frame: Shared<Frame>) {
+            let order = frame.as_ref().order;
+
+            let buddy_frame = self.get_buddy_frame(frame, order);
+            if unsafe { buddy_frame.as_ref().is_alloc } == false {
+                // merge
+                //
+            }
+        }
+
         fn free_frame_count(&self) -> usize {
             self.free_frame_counts
                 .iter()
@@ -317,6 +342,7 @@ mod tests {
         for i in 0..SIZE {
             let f = get_ith_frame(i);
             f.order = i;
+            f.is_alloc = false;
         }
 
         let frame = get_ith_frame(0);

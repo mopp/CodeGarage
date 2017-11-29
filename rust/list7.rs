@@ -255,22 +255,26 @@ mod tests {
         }
 
         fn get_buddy_frame(&self, f: Shared<Frame>, order: usize) -> Option<Shared<Frame>> {
+            let frame_addr = f.as_ptr() as usize;
             let head_addr = self.frame_ptr as usize;
-            let tail_addr = self.frame_ptr.offset(self.frame_count as isize) as usize;
+            let tail_addr = unsafe { self.frame_ptr.offset(self.frame_count as isize) as usize };
 
-            debug_assert!(addr < head_addr, "Invalid frame is given");
-            debug_assert!(tail_addr < addr, "Invalid frame is given");
+            debug_assert!(head_addr < frame_addr, "Invalid frame is given");
+            debug_assert!(frame_addr < tail_addr, "Invalid frame is given");
 
-            let addr = f.as_ptr() as usize;
-            if (addr <= head_addr) || (tail_addr <= addr) {
+            if (frame_addr <= head_addr) || (tail_addr <= frame_addr) {
+                return None;
             }
 
-            // TODO: check boundary.
-            let buddy_ptr = (f.as_ptr() as usize) ^ (1 << order);
-            unsafe { Shared::new_unchecked(buddy_ptr as _) }
+            let buddy_ptr = frame_addr ^ (1 << order);
+            Some(unsafe { Shared::new_unchecked(buddy_ptr as *mut _) })
         }
 
         pub fn alloc(&mut self, request_order: usize) -> Option<Shared<Frame>> {
+            if MAX_ORDER <= request_order {
+                return None;
+            }
+
             // find last set instruction makes it more accelerate ?
             // 0001 1000
             // fls(map >> request_order) ?
@@ -286,11 +290,15 @@ mod tests {
 
                         // Push extra frames.
                         for i in request_order..order {
-                            unsafe {
-                                let mut buddy_frame = self.get_buddy_frame(frame, i);
-                                buddy_frame.as_mut().order = i;
-                                self.frame_lists[i].push_tail(buddy_frame);
-                                self.free_frame_counts[i] += 1;
+                            match self.get_buddy_frame(frame, i) {
+                                Some(mut buddy_frame) => {
+                                    unsafe {
+                                        buddy_frame.as_mut().order = i;
+                                    }
+                                    self.frame_lists[i].push_tail(buddy_frame);
+                                    self.free_frame_counts[i] += 1;
+                                }
+                                None => unreachable!("why"),
                             }
                         }
 
@@ -307,13 +315,39 @@ mod tests {
         }
 
         pub fn free(&mut self, frame: Shared<Frame>) {
-            let order = frame.as_ref().order;
+            let order = unsafe { frame.as_ref().order };
 
-            let buddy_frame = self.get_buddy_frame(frame, order);
-            if unsafe { buddy_frame.as_ref().is_alloc } == false {
-                // merge
-                //
+            let mut merged_frame = frame;
+            for order in order..MAX_ORDER {
+                match self.get_buddy_frame(merged_frame, order) {
+                    Some(mut shared_buddy_frame) => {
+                        if unsafe {shared_buddy_frame.as_ref()}.is_alloc {
+                            continue;
+                        }
+
+                        {
+                            let buddy_frame = unsafe{ shared_buddy_frame.as_mut() };
+                            self.free_frame_counts[buddy_frame.order] -= 1;
+                            buddy_frame.detach();
+                            if self.free_frame_counts[buddy_frame.order] == 0 {
+                                self.frame_lists[buddy_frame.order].node = None;
+                            }
+                        }
+
+                        let buddy_frame_addr = shared_buddy_frame.as_ptr() as usize;
+                        let merged_frame_addr = merged_frame.as_ptr() as usize;
+                        // Select frame which has smaller address.
+                        if buddy_frame_addr < merged_frame_addr {
+                            merged_frame = shared_buddy_frame;
+                        }
+                    }
+                    _ => break
+                }
             }
+
+            let order = unsafe { merged_frame.as_ref().order };
+            self.frame_lists[order].push_tail(merged_frame);
+            self.free_frame_counts[order] += 1;
         }
 
         fn free_frame_count(&self) -> usize {

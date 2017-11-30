@@ -422,47 +422,47 @@ mod tests {
         ptr as _
     }
 
-    // #[test]
-    // fn test_usage() {
-    //     static SIZE: usize = 1024;
-    //     let nodes: *mut Frame = allocate_nodes(SIZE);
-    //     let get_ith_frame = |i: usize| unsafe { &mut *nodes.offset(i as isize) as &mut Frame };
-    //
-    //     for i in 0..SIZE {
-    //         let f = get_ith_frame(i);
-    //         f.order = i;
-    //         f.is_alloc = false;
-    //     }
-    //
-    //     let frame = get_ith_frame(0);
-    //     frame.init_link();
-    //     assert_eq!(frame.length(), 1);
-    //
-    //     for i in 1..SIZE {
-    //         let f = get_ith_frame(i);
-    //         let s = Shared::from(f);
-    //         frame.insert_next(s);
-    //         assert_eq!(frame.length(), 1 + i);
-    //     }
-    //
-    //     assert_eq!(frame.length(), SIZE);
-    //
-    //     {
-    //         // missing ?
-    //         let f = get_ith_frame(10);
-    //         f.detach();
-    //         assert_eq!(frame.length(), SIZE - 1);
-    //     }
-    //
-    //     assert_eq!(frame.find(|_| false).is_none(), true);
-    //     let r = frame.find(|n| n.order == 100);
-    //
-    //     unsafe {
-    //         assert_eq!(r.is_some(), true);
-    //         assert_eq!(r.unwrap().as_ref().order, 100);
-    //     }
-    // }
-    //
+    #[test]
+    fn test_usage() {
+        static SIZE: usize = 1024;
+        let nodes: *mut Frame = allocate_nodes(SIZE);
+        let get_ith_frame = |i: usize| unsafe { &mut *nodes.offset(i as isize) as &mut Frame };
+
+        for i in 0..SIZE {
+            let f = get_ith_frame(i);
+            f.order = i;
+            f.is_alloc = false;
+        }
+
+        let frame = get_ith_frame(0);
+        frame.init_link();
+        assert_eq!(frame.length(), 1);
+
+        for i in 1..SIZE {
+            let f = get_ith_frame(i);
+            let s = Shared::from(f);
+            frame.insert_next(s);
+            assert_eq!(frame.length(), 1 + i);
+        }
+
+        assert_eq!(frame.length(), SIZE);
+
+        {
+            // missing ?
+            let f = get_ith_frame(10);
+            f.detach();
+            assert_eq!(frame.length(), SIZE - 1);
+        }
+
+        assert_eq!(frame.find(|_| false).is_none(), true);
+        let r = frame.find(|n| n.order == 100);
+
+        unsafe {
+            assert_eq!(r.is_some(), true);
+            assert_eq!(r.unwrap().as_ref().order, 100);
+        }
+    }
+
     #[test]
     fn test_buddy_manager() {
         // 1,2,4,8,16,32,64
@@ -471,24 +471,27 @@ mod tests {
         let frames: *mut Frame = allocate_nodes(SIZE);
 
         let mut bman = BuddyManager::new(frames, SIZE);
-        // assert_eq!(bman.free_frame_counts[10], 1);
-        // assert_eq!(bman.free_frame_counts[3], 1);
-        // assert_eq!(bman.free_frame_counts[0], 1);
+        assert_eq!(bman.frame_lists[10].length(), 1);
+        assert_eq!(bman.frame_lists[3].length(), 1);
+        assert_eq!(bman.frame_lists[0].length(), 1);
         assert_eq!(bman.free_frame_count(), SIZE);
 
         let frame1 = bman.alloc(0);
         assert_eq!(frame1.is_some(), true);
-        // assert_eq!(bman.free_frame_counts[0], 0);
+        assert_eq!(bman.frame_lists[0].length(), 0);
         assert_eq!(bman.free_frame_count(), SIZE - 1);
 
-        // let frame2 = bman.alloc(0);
-        // assert_eq!(frame2.is_some(), true);
-        // assert_eq!(bman.free_frame_counts[0], 1);
-        // assert_eq!(bman.free_frame_counts[1], 1);
-        // assert_eq!(bman.free_frame_counts[2], 1);
-        // assert_eq!(bman.free_frame_count(), SIZE - 2);
+        let frame2 = bman.alloc(0);
+        assert_eq!(frame2.is_some(), true);
+        assert_eq!(bman.frame_lists[0].length(), 1);
+        assert_eq!(bman.frame_lists[1].length(), 1);
+        assert_eq!(bman.frame_lists[2].length(), 1);
+        assert_eq!(bman.free_frame_count(), SIZE - 2);
 
         bman.free(frame1.unwrap());
-        // assert_eq!(bman.free_frame_count(), SIZE - 1);
+        assert_eq!(bman.free_frame_count(), SIZE - 1);
+
+        bman.free(frame2.unwrap());
+        assert_eq!(bman.free_frame_count(), SIZE);
     }
 }

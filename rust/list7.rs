@@ -52,6 +52,7 @@ pub trait Node<T: Node<T>> {
         println!("detach - self = {:?}", self.as_shared().as_ptr());
         println!("detach - next = {:?}", self.next_mut().as_ptr());
         println!("detach - prev = {:?}", self.prev_mut().as_ptr());
+        println!("detach - len  = {:?}", self.length());
         self.next_mut().set_prev(prev);
         self.prev_mut().set_next(next);
 
@@ -177,6 +178,9 @@ impl<T: Node<T>> List<T> {
     fn has_node(&self, target_node: Shared<T>) -> bool {
         match self.node {
             None => false,
+            Some(mut node) if self.length == 1 => {
+                ptr::eq(node.as_ptr(), target_node.as_ptr())
+            },
             Some(mut node) => {
                 let node = unsafe { node.as_mut() };
                 let tail = node.prev_mut().as_shared();
@@ -318,12 +322,20 @@ mod tests {
             debug_assert!(head_addr <= frame_addr, "Invalid frame is given");
             debug_assert!(frame_addr <= tail_addr, "Invalid frame is given");
 
-            if (frame_addr <= head_addr) || (tail_addr <= frame_addr) {
+            let is_in_valid_range = |addr: usize| (head_addr <= addr) && (addr <= tail_addr);
+
+            if is_in_valid_range(frame_addr) == false {
                 return None;
             }
 
             let buddy_index = self.get_frame_index(frame) ^ (1 << order);
-            Some(unsafe { Shared::new_unchecked(self.frame_ptr.offset(buddy_index as isize)) })
+            let buddy_addr = unsafe { self.frame_ptr.offset(buddy_index as isize) };
+
+            if is_in_valid_range(buddy_addr as usize) == false {
+                None
+            } else {
+                Some(unsafe { Shared::new_unchecked(buddy_addr) })
+            }
         }
 
         pub fn alloc(&mut self, request_order: usize) -> Option<Shared<Frame>> {
@@ -385,22 +397,26 @@ mod tests {
                             continue;
                         }
 
-                        // TODO: check frame state ?
-                        unsafe { buddy_frame.as_mut().detach() }
                         self.frame_lists[order].detach_node(buddy_frame);
 
                         // Select frame which has smaller address.
                         if buddy_frame.as_ptr() < merged_frame.as_ptr() {
                             merged_frame = buddy_frame;
                         }
+                        unsafe {
+                            merged_frame.as_mut().order = order + 1;
+                            merged_frame.as_mut().is_alloc = false;
+                        };
                     }
                     _ => {
-                        unsafe { merged_frame.as_mut().order = order };
-                        self.frame_lists[order].push_tail(merged_frame);
                         break;
                     }
                 }
             }
+
+            let order = unsafe { merged_frame.as_ref().order };
+            println!("free - {:?}", order);
+            self.frame_lists[order].push_tail(merged_frame);
         }
 
         fn free_frame_count(&self) -> usize {
@@ -467,7 +483,6 @@ mod tests {
     fn test_buddy_manager() {
         // 1,2,4,8,16,32,64
         static SIZE: usize = 1024 + (1 + 8);
-        println!("{}", SIZE);
         let frames: *mut Frame = allocate_nodes(SIZE);
 
         let mut bman = BuddyManager::new(frames, SIZE);
@@ -492,6 +507,9 @@ mod tests {
         assert_eq!(bman.free_frame_count(), SIZE - 1);
 
         bman.free(frame2.unwrap());
+        assert_eq!(bman.frame_lists[10].length(), 1);
+        assert_eq!(bman.frame_lists[3].length(), 1);
+        assert_eq!(bman.frame_lists[0].length(), 1);
         assert_eq!(bman.free_frame_count(), SIZE);
     }
 }

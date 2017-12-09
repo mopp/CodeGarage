@@ -1,10 +1,8 @@
 #include <stdio.h>
 
 
-int main(int argc, char const* const argv[]) {
-    for (;;) {
-        puts((1 < argc) ? (argv[1]) : ("yes"));
-    }
+int main(void) {
+    while(1) {puts("y");}
 
     return 0;
 }

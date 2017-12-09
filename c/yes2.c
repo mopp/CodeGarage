@@ -1,18 +1,18 @@
 #include <stdio.h>
-#include <unistd.h>
+#include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
+int main(void) {
+    #define SIZE 8192
+    char* const msg = malloc(SIZE);
 
-int main(int argc, char const* const argv[]) {
-    static char* const msg[BUFSIZ];
+    size_t count = 0;
+    do {
+        memcpy((void*)(msg + count), "y\n", 2);
+    } while ((count += 2) < SIZE);
 
-    for (size_t i = 0; i < BUFSIZ / 4; i++) {
-        memcpy((void*)msg + i * 4, "yes\n", 4);
-    }
-
-    for (;;) {
-        write(STDOUT_FILENO, msg, BUFSIZ);
-    }
+    while(write(STDOUT_FILENO, msg, SIZE)) {}
 
     return 0;
 }

@@ -93,22 +93,19 @@ static void* memset3(void* s, register int c, size_t n) {
 }
 
 
-static void* memset4(void* s, register int c, size_t n) {
-    register uintptr_t itr = (uintptr_t)s;
-    register uintptr_t end = itr + n;
+static void* memset4(void* s, int c, size_t n) {
+    uintptr_t itr = (uintptr_t)s;
+    uintptr_t end = itr + n;
 
-    for (register uint32_t v = (uint32_t)((c << 24) | (c << 16) | (c << 8) | c); itr < end; itr += sizeof(uint32_t)) {
-        *(uint32_t*)(itr) = v;
-    }
+    uint16_t b16 = (uint16_t)((c << 8) | c);
+    uint32_t b32 = (uint32_t)b16 << 16 | b16;
+    uint32_t b64 = (uint64_t)b32 << 32 | b32;
+    uint8_t b8   = (uint8_t)c;
 
-    for (register uint16_t v = (uint16_t)((c << 8) | c); itr < end; itr += sizeof(uint16_t)) {
-        *(uint16_t*)(itr) = v;
-    }
-
-    for (register uint8_t v = (uint8_t)c; itr < end; itr += sizeof(uint8_t)) {
-        *(uint8_t*)(itr) = v;
-    }
-
+    for (uint64_t v = b64; itr < end; itr += sizeof(uint32_t)) { *(uint32_t*)(itr) = v; }
+    for (uint32_t v = b32; itr < end; itr += sizeof(uint32_t)) { *(uint32_t*)(itr) = v; }
+    for (uint16_t v = b16; itr < end; itr += sizeof(uint16_t)) { *(uint16_t*)(itr) = v; }
+    for (uint8_t v = b8; itr < end; itr += sizeof(uint8_t)) { *(uint8_t*)(itr) = v; }
 
     return s;
 }
@@ -182,9 +179,9 @@ static void worker3(memset_f f, size_t n) {
 
 
 int main(void) {
-    memset_f fs[] = {memset2, memset3, memset4};
+    memset_f fs[] = {memset0, memset1, memset2, memset3, memset4};
 
-    for (size_t i = 0; i < 3; i++) {
+    for (size_t i = 0; i < sizeof(fs) / sizeof(fs[0]); i++) {
         worker2(fs[i]);
     }
 

@@ -180,7 +180,7 @@ impl<T: Node<T>> List<T> {
     fn has_node(&self, target_node: Shared<T>) -> bool {
         match self.node {
             None => false,
-            Some(mut node) if self.length == 1 => {
+            Some(node) if self.length == 1 => {
                 ptr::eq(node.as_ptr(), target_node.as_ptr())
             },
             Some(mut node) => {
@@ -217,6 +217,43 @@ mod tests {
     use super::*;
     use std::heap::{Alloc, Layout, System};
     use std::mem;
+
+    struct Frame {
+        next: Shared<Frame>,
+        prev: Shared<Frame>,
+        order: usize,
+        is_alloc: bool,
+    }
+
+    impl Node<Frame> for Frame {
+        fn as_ptr(&mut self) -> *mut Frame {
+            self as *mut _
+        }
+
+        fn set_next(&mut self, s: Shared<Frame>) {
+            self.next = s;
+        }
+
+        fn set_prev(&mut self, s: Shared<Frame>) {
+            self.prev = s;
+        }
+
+        fn next(&self) -> &Frame {
+            unsafe { self.next.as_ref() }
+        }
+
+        fn next_mut(&mut self) -> &mut Frame {
+            unsafe { self.next.as_mut() }
+        }
+
+        fn prev(&self) -> &Frame {
+            unsafe { self.prev.as_ref() }
+        }
+
+        fn prev_mut(&mut self) -> &mut Frame {
+            unsafe { self.prev.as_mut() }
+        }
+    }
 
     fn allocate_nodes<T>(count: usize) -> *mut T {
         let type_size = mem::size_of::<T>();
@@ -266,39 +303,5 @@ mod tests {
             assert_eq!(r.is_some(), true);
             assert_eq!(r.unwrap().as_ref().order, 100);
         }
-    }
-
-    #[test]
-    fn test_buddy_manager() {
-        // 1,2,4,8,16,32,64
-        static SIZE: usize = 1024 + (1 + 8);
-        let frames: *mut Frame = allocate_nodes(SIZE);
-
-        let mut bman = BuddyManager::new(frames, SIZE);
-        assert_eq!(bman.frame_lists[10].length(), 1);
-        assert_eq!(bman.frame_lists[3].length(), 1);
-        assert_eq!(bman.frame_lists[0].length(), 1);
-        assert_eq!(bman.free_frame_count(), SIZE);
-
-        let frame1 = bman.alloc(0);
-        assert_eq!(frame1.is_some(), true);
-        assert_eq!(bman.frame_lists[0].length(), 0);
-        assert_eq!(bman.free_frame_count(), SIZE - 1);
-
-        let frame2 = bman.alloc(0);
-        assert_eq!(frame2.is_some(), true);
-        assert_eq!(bman.frame_lists[0].length(), 1);
-        assert_eq!(bman.frame_lists[1].length(), 1);
-        assert_eq!(bman.frame_lists[2].length(), 1);
-        assert_eq!(bman.free_frame_count(), SIZE - 2);
-
-        bman.free(frame1.unwrap());
-        assert_eq!(bman.free_frame_count(), SIZE - 1);
-
-        bman.free(frame2.unwrap());
-        assert_eq!(bman.frame_lists[10].length(), 1);
-        assert_eq!(bman.frame_lists[3].length(), 1);
-        assert_eq!(bman.frame_lists[0].length(), 1);
-        assert_eq!(bman.free_frame_count(), SIZE);
     }
 }

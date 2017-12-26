@@ -272,5 +272,11 @@ mod tests {
         assert_eq!(bman.frame_lists[3].length(), 1);
         assert_eq!(bman.frame_lists[0].length(), 1);
         assert_eq!(bman.free_frame_count(), SIZE);
+
+        let frame1 = bman.alloc(100);
+        assert_eq!(frame1.is_none(), true);
+
+        let frame1 = bman.alloc(1);
+        assert_eq!(unsafe {frame1.unwrap().as_ref()}.order, 1);
     }
 }

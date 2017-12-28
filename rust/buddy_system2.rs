@@ -18,6 +18,19 @@ struct Frame {
     is_alloc: bool,
 }
 
+
+struct DummyFrame {
+    id: usize
+}
+
+impl<'a> From<&'a Frame> for DummyFrame {
+    fn from(f: &'a Frame) -> Self {
+        DummyFrame {
+            id: f.order
+        }
+    }
+}
+
 impl Node<Frame> for Frame {
     fn as_ptr(&mut self) -> *mut Frame {
         self as *mut _
@@ -133,7 +146,7 @@ impl BuddyManager {
         }
     }
 
-    pub fn alloc(&mut self, request_order: usize) -> Option<Shared<Frame>> {
+    pub fn alloc(&mut self, request_order: usize) -> Option<DummyFrame> {
         if MAX_ORDER <= request_order {
             return None;
         }
@@ -166,14 +179,14 @@ impl BuddyManager {
                         }
                     }
 
-                    return Some(frame);
+                    return Some(frame.as_ref().into());
                 }
                 Some(mut frame) => {
                     unsafe {
                         frame.as_mut().order = request_order;
                         frame.as_mut().is_alloc = true;
                     };
-                    return Some(frame);
+                    return Some(frame.as_ref().into());
                 }
             }
         }
@@ -181,7 +194,7 @@ impl BuddyManager {
         None
     }
 
-    pub fn free(&mut self, frame: Shared<Frame>) {
+    pub fn free(&mut self, frame: DummyFrame) {
         let order = unsafe { frame.as_ref().order };
 
         let mut merged_frame = frame;

@@ -20,13 +20,13 @@ struct Frame {
 
 
 struct DummyFrame {
-    id: usize
+    index: usize
 }
 
 impl<'a> From<&'a Frame> for DummyFrame {
     fn from(f: &'a Frame) -> Self {
         DummyFrame {
-            id: f.order
+            index: f.order
         }
     }
 }
@@ -197,7 +197,7 @@ impl BuddyManager {
     pub fn free(&mut self, frame: DummyFrame) {
         let order = unsafe { frame.as_ref().order };
 
-        let mut merged_frame = frame;
+        let mut merged_frame = self.frame_lists[frame.index];
         for order in order..MAX_ORDER {
             match self.get_buddy_frame(merged_frame, order) {
                 Some(mut buddy_frame) => {

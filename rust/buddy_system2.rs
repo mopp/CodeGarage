@@ -179,14 +179,14 @@ impl BuddyManager {
                         }
                     }
 
-                    return Some(frame.as_ref().into());
+                    return unsafe { Some(frame.as_ref().into()) };
                 }
                 Some(mut frame) => {
                     unsafe {
                         frame.as_mut().order = request_order;
                         frame.as_mut().is_alloc = true;
                     };
-                    return Some(frame.as_ref().into());
+                    return unsafe { Some(frame.as_ref().into()) };
                 }
             }
         }
@@ -195,9 +195,15 @@ impl BuddyManager {
     }
 
     pub fn free(&mut self, frame: DummyFrame) {
+        debug_assert!(frame.index < self.frame_count);
+
+        let frame = unsafe {
+            let ptr = self.frame_ptr.offset(frame.index as isize);
+            Shared::new_unchecked(ptr)
+        };
         let order = unsafe { frame.as_ref().order };
 
-        let mut merged_frame = self.frame_lists[frame.index];
+        let mut merged_frame = frame;
         for order in order..MAX_ORDER {
             match self.get_buddy_frame(merged_frame, order) {
                 Some(mut buddy_frame) => {
@@ -290,6 +296,6 @@ mod tests {
         assert_eq!(frame1.is_none(), true);
 
         let frame1 = bman.alloc(1);
-        assert_eq!(unsafe {frame1.unwrap().as_ref()}.order, 1);
+        assert_eq!(frame1.is_some(), true);
     }
 }

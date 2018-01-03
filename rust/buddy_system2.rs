@@ -23,14 +23,6 @@ struct DummyFrame {
     index: usize
 }
 
-impl<'a> From<&'a Frame> for DummyFrame {
-    fn from(f: &'a Frame) -> Self {
-        DummyFrame {
-            index: f.order
-        }
-    }
-}
-
 impl Node<Frame> for Frame {
     fn as_ptr(&mut self) -> *mut Frame {
         self as *mut _
@@ -179,14 +171,14 @@ impl BuddyManager {
                         }
                     }
 
-                    return unsafe { Some(frame.as_ref().into()) };
+                    return Some(DummyFrame {index: self.get_frame_index(frame)});
                 }
                 Some(mut frame) => {
                     unsafe {
                         frame.as_mut().order = request_order;
                         frame.as_mut().is_alloc = true;
                     };
-                    return unsafe { Some(frame.as_ref().into()) };
+                    return Some(DummyFrame {index: self.get_frame_index(frame)});
                 }
             }
         }

@@ -10,6 +10,14 @@ struct Node<T> {
     v: T
 }
 
+impl<T> Node<T> {
+    fn init_link(&mut self) {
+        let s = unsafe {Shared::new_unchecked(self as _)};
+        self.next = Some(s);
+        self.prev = Some(s);
+    }
+}
+
 
 impl<T> Deref for Node<T> {
     type Target = T;

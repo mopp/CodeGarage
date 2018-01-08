@@ -25,19 +25,22 @@ impl<T> Node<T> {
     }
 
     fn length(&self) -> usize {
-        if self.next.is_none() && self.prev.is_none() {
-            return 1;
-        }
+        let mut node =
+            if let Some(ref next) = self.next {
+                unsafe { next.as_ref() }
+            } else {
+                return 1;
+            };
 
-        debug_assert!(self.next.is_some() && self.prev.is_some());
-
-        let tail = self.prev.unwrap();
-        let mut current = self.next.unwrap();
-
-        let mut count = 1;
-        while ptr::eq(current.as_ptr(), tail.as_ptr()) == false {
-            count += 1;
-            current = unsafe { current.as_ref().next.unwrap() };
+        let mut count = 2;
+        loop {
+            match node.next {
+                None => break,
+                Some(ref next) => {
+                    node = unsafe { next.as_ref() };
+                    count += 1;
+                }
+            }
         }
 
         count

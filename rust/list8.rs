@@ -1,8 +1,13 @@
 #![feature(shared)]
 
+use std::ptr;
 use std::ptr::Shared;
 use std::ops::{Deref, DerefMut};
 
+pub struct List<T> {
+    node: Option<Node<T>>,
+    length: usize,
+}
 
 struct Node<T> {
     next: Option<Shared<Node<T>>>,
@@ -11,10 +16,31 @@ struct Node<T> {
 }
 
 impl<T> Node<T> {
-    fn init_link(&mut self) {
-        let s = unsafe {Shared::new_unchecked(self as _)};
-        self.next = Some(s);
-        self.prev = Some(s);
+    pub fn new(v: T) -> Node<T> {
+        Node {
+            next: None,
+            prev: None,
+            v
+        }
+    }
+
+    fn length(&self) -> usize {
+        if self.next.is_none() && self.prev.is_none() {
+            return 1;
+        }
+
+        debug_assert!(self.next.is_some() && self.prev.is_some());
+
+        let tail = self.prev.unwrap();
+        let mut current = self.next.unwrap();
+
+        let mut count = 1;
+        while ptr::eq(current.as_ptr(), tail.as_ptr()) == false {
+            count += 1;
+            current = unsafe { current.as_ref().next.unwrap() };
+        }
+
+        count
     }
 }
 
@@ -35,16 +61,6 @@ impl<T> DerefMut for Node<T> {
 }
 
 
-impl<T> Node<T> {
-    pub fn new(v: T) -> Node<T> {
-        Node {
-            next: None,
-            prev: None,
-            v
-        }
-    }
-}
-
 
 
 #[cfg(test)]
@@ -63,5 +79,7 @@ mod tests {
         assert_eq!(n1.order, 0);
         n1.order = 10;
         assert_eq!(n1.order, 10);
+
+        assert_eq!(n1.length(), 1);
     }
 }

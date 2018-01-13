@@ -5,8 +5,30 @@ use std::ptr::Shared;
 use std::ops::{Deref, DerefMut};
 
 pub struct List<T> {
-    node: Option<Node<T>>,
+    head: Option<Node<T>>,
+    tail: Option<Node<T>>,
     length: usize,
+}
+
+impl<T> List<T> {
+    pub fn new() -> List<T> {
+        List<T> {
+            head: None,
+            tail: None,
+            length: 0,
+        }
+    }
+
+    pub fn length(&self) -> usize {
+        self.length
+    }
+
+    pub fn push_head(&mut self, n: Node<T>) {
+        self.node
+    }
+
+    pub fn push_tail(&self, n: Node<T>) {
+    }
 }
 
 struct Node<T> {

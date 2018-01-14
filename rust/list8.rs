@@ -5,8 +5,8 @@ use std::ptr::Shared;
 use std::ops::{Deref, DerefMut};
 
 pub struct List<T> {
-    head: Option<Node<T>>,
-    tail: Option<Node<T>>,
+    head: Option<Shared<Node<T>>>,
+    tail: Option<Shared<Node<T>>>,
     length: usize,
 }
 
@@ -24,7 +24,13 @@ impl<T> List<T> {
     }
 
     pub fn push_head(&mut self, n: Node<T>) {
-        self.node
+        match self.head {
+            None => self.head = Some(unsafe { Shared }),
+            Some(head) => {
+                n.next = self.head;
+                head.next.
+            }
+        }
     }
 
     pub fn push_tail(&self, n: Node<T>) {

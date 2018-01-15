@@ -7,6 +7,7 @@
 
 use std::convert::{AsRef, AsMut};
 use std::default::Default;
+use std::ops::{Deref, DerefMut};
 use std::ptr::{Unique, Shared};
 
 
@@ -205,6 +206,21 @@ impl<T: Default> AsMut<T> for Node<T> {
     }
 }
 
+impl<T: Default> Deref for Node<T> {
+    type Target = T;
+
+    fn deref(&self) -> &T {
+        &self.element
+    }
+}
+
+
+impl<T: Default> DerefMut for Node<T> {
+    fn deref_mut(&mut self) -> &mut T {
+        &mut self.element
+    }
+}
+
 
 #[cfg(test)]
 mod tests {
@@ -309,5 +325,38 @@ mod tests {
 
         *(objs[0].as_mut()) = 10;
         assert_eq!(objs[0].as_ref(), &10);
+    }
+
+    struct Frame {
+        order: u8,
+        is_alloc: bool
+    }
+
+    impl Default for Frame {
+        fn default() -> Self {
+            Frame {
+                order: 0,
+                is_alloc: false
+            }
+        }
+    }
+
+    #[test]
+    fn test_usage()
+    {
+        let objs = allocate_node_objs::<Node<Frame>>(128);
+
+        let mut list = LinkedList::new();
+        for (i, o) in objs.iter_mut().enumerate() {
+            o.order = 0;
+            o.is_alloc = false;
+
+            list.push_front(unsafe {Unique::new_unchecked(o)});
+        }
+
+        match list.front() {
+            Some(frame) => assert_eq!(frame.order, 0),
+            None => panic!("error")
+        }
     }
 }

@@ -312,19 +312,32 @@ mod tests {
 
     #[test]
     fn test_usage() {
-        let objs = allocate_node_objs::<Node<Frame>>(128);
+        const SIZE: usize = 128;
+        let objs = allocate_node_objs::<Node<Frame>>(SIZE);
 
-        let mut list = LinkedList::new();
+        let mut list1 = LinkedList::new();
         for f in objs {
             f.order = 0;
             f.is_alloc = false;
 
-            list.push_front(unsafe { Unique::new_unchecked(f) });
+            list1.push_front(unsafe { Unique::new_unchecked(f) });
         }
+        assert_eq!(list1.len(), SIZE);
 
-        match list.front() {
+        match list1.front() {
             Some(frame) => assert_eq!(frame.order, 0),
             None => panic!("error"),
         }
+
+        // Move the all element into list2 from list1.
+        let mut list2 = LinkedList::new();
+        loop {
+            match list1.pop_front() {
+                Some(n) => list2.push_back(n),
+                None => break,
+            }
+        }
+        assert_eq!(list1.len(), 0);
+        assert_eq!(list2.len(), SIZE);
     }
 }

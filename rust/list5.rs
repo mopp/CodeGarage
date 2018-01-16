@@ -5,28 +5,42 @@
 #![cfg_attr(test, feature(allocator_api))]
 
 use std::convert::{AsMut, AsRef};
-use std::default::Default;
 use std::ops::{Deref, DerefMut};
 use std::ptr::{Shared, Unique};
+use std::mem;
 
 /// LinkedList struct.
-pub struct LinkedList<T: Default> {
+pub struct LinkedList<T> {
     // There two fields are just dummy node to implement Node::detach easily.
     head: Node<T>,
     tail: Node<T>,
 }
 
-pub struct Node<T: Default> {
+pub struct Node<T> {
     next: Option<Shared<Node<T>>>,
     prev: Option<Shared<Node<T>>>,
     element: T,
 }
 
-impl<T: Default> LinkedList<T> {
+impl<T> LinkedList<T> {
     pub fn new() -> LinkedList<T> {
+        let head = unsafe {
+            let mut n: Node<T> = mem::uninitialized();
+            n.next = None;
+            n.prev = None;
+            n
+        };
+
+        let tail = unsafe {
+            let mut n: Node<T> = mem::uninitialized();
+            n.next = None;
+            n.prev = None;
+            n
+        };
+
         LinkedList {
-            head: Default::default(),
-            tail: Default::default(),
+            head: head,
+            tail: tail,
         }
     }
 
@@ -145,17 +159,7 @@ impl<T: Default> LinkedList<T> {
     }
 }
 
-impl<T: Default> Default for Node<T> {
-    fn default() -> Node<T> {
-        Node {
-            next: None,
-            prev: None,
-            element: Default::default(),
-        }
-    }
-}
-
-impl<T: Default> Node<T> {
+impl<T> Node<T> {
     pub fn detach(&mut self) {
         if let Some(mut next) = self.next {
             let next = unsafe { next.as_mut() };
@@ -172,19 +176,19 @@ impl<T: Default> Node<T> {
     }
 }
 
-impl<T: Default> AsRef<T> for Node<T> {
+impl<T> AsRef<T> for Node<T> {
     fn as_ref(&self) -> &T {
         &self.element
     }
 }
 
-impl<T: Default> AsMut<T> for Node<T> {
+impl<T> AsMut<T> for Node<T> {
     fn as_mut(&mut self) -> &mut T {
         &mut self.element
     }
 }
 
-impl<T: Default> Deref for Node<T> {
+impl<T> Deref for Node<T> {
     type Target = T;
 
     fn deref(&self) -> &T {
@@ -192,7 +196,7 @@ impl<T: Default> Deref for Node<T> {
     }
 }
 
-impl<T: Default> DerefMut for Node<T> {
+impl<T> DerefMut for Node<T> {
     fn deref_mut(&mut self) -> &mut T {
         &mut self.element
     }
@@ -207,10 +211,7 @@ mod tests {
     use std::slice;
     use std::ptr::Unique;
 
-    fn allocate_node_objs<'a, T>(count: usize) -> &'a mut [T]
-    where
-        T: Default,
-    {
+    fn allocate_node_objs<'a, T>(count: usize) -> &'a mut [T] {
         let type_size = mem::size_of::<T>();
         let align = mem::align_of::<T>();
         let layout = Layout::from_size_align(count * type_size, align).unwrap();
@@ -307,15 +308,6 @@ mod tests {
     struct Frame {
         order: u8,
         is_alloc: bool,
-    }
-
-    impl Default for Frame {
-        fn default() -> Self {
-            Frame {
-                order: 0,
-                is_alloc: false,
-            }
-        }
     }
 
     #[test]

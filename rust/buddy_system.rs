@@ -7,7 +7,6 @@ extern crate list5;
 use list5::LinkedList;
 use list5::Node;
 
-use std::default::Default;
 use std::mem;
 use std::ptr::Unique;
 use std::ptr;
@@ -27,15 +26,6 @@ struct BuddyManager {
     frame_size_unit: usize,
     count_free_frames: [usize; MAX_ORDER],
     lists: [LinkedList<Frame>; MAX_ORDER],
-}
-
-impl Default for Frame {
-    fn default() -> Frame {
-        Frame {
-            order: 0,
-            is_free: true,
-        }
-    }
 }
 
 impl BuddyManager {
@@ -209,10 +199,7 @@ mod tests {
 
     const FRAME_SIZE: usize = 4096;
 
-    fn allocate_node_objs<'a, T>(count: usize) -> &'a mut [T]
-    where
-        T: Default,
-    {
+    fn allocate_node_objs<'a, T>(count: usize) -> &'a mut [T] {
         let type_size = mem::size_of::<T>();
         let align = mem::align_of::<T>();
         let layout = Layout::from_size_align(count * type_size, align).unwrap();

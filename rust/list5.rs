@@ -315,11 +315,11 @@ mod tests {
         let objs = allocate_node_objs::<Node<Frame>>(128);
 
         let mut list = LinkedList::new();
-        for (i, o) in objs.iter_mut().enumerate() {
-            o.order = 0;
-            o.is_alloc = false;
+        for f in objs {
+            f.order = 0;
+            f.is_alloc = false;
 
-            list.push_front(unsafe { Unique::new_unchecked(o) });
+            list.push_front(unsafe { Unique::new_unchecked(f) });
         }
 
         match list.front() {

@@ -106,7 +106,10 @@ impl BuddyManager {
         for order in (0..MAX_ORDER).rev() {
             let count_frames_in_list = 1usize << order;
             while count_frames_in_list <= count_rest_frames {
-                self.push_node_frame(order, unsafe { Unique::new_unchecked(current_node_ptr) });
+                match Unique::new(current_node_ptr) {
+                    Some(n) => self.push_node_frame(order, n),
+                    None => panic!("the null pointer was given"),
+                }
 
                 current_node_ptr =
                     unsafe { current_node_ptr.offset(count_frames_in_list as isize) };

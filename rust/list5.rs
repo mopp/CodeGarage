@@ -1,12 +1,12 @@
 #![crate_type = "rlib"]
 #![crate_name = "list5"]
-#![feature(shared)]
 #![feature(unique)]
+#![feature(ptr_internals)]
 #![cfg_attr(test, feature(allocator_api))]
 
 use std::convert::{AsMut, AsRef};
 use std::ops::{Deref, DerefMut};
-use std::ptr::{Shared, Unique};
+use std::ptr::{NonNull, Unique};
 use std::mem;
 
 /// LinkedList struct.
@@ -17,8 +17,8 @@ pub struct LinkedList<T> {
 }
 
 pub struct Node<T> {
-    next: Option<Shared<Node<T>>>,
-    prev: Option<Shared<Node<T>>>,
+    next: Option<NonNull<Node<T>>>,
+    prev: Option<NonNull<Node<T>>>,
     element: T,
 }
 
@@ -91,39 +91,39 @@ impl<T> LinkedList<T> {
     }
 
     pub fn push_front(&mut self, new_node: Unique<Node<T>>) {
-        let mut new_shared_node = Shared::from(new_node);
+        let mut new_head = NonNull::from(new_node);
 
         {
-            let n = unsafe { new_shared_node.as_mut() };
+            let n = unsafe { new_head.as_mut() };
             n.next = self.head.next;
             n.prev = None;
         }
 
-        let new_shared_node = Some(new_shared_node);
+        let new_head = Some(new_head);
         match self.head.next {
-            None => self.tail.prev = new_shared_node,
-            Some(mut head) => unsafe { head.as_mut().prev = new_shared_node },
+            None => self.tail.prev = new_head,
+            Some(mut old_head) => unsafe { old_head.as_mut().prev = new_head },
         }
 
-        self.head.next = new_shared_node;
+        self.head.next = new_head;
     }
 
     pub fn push_back(&mut self, new_node: Unique<Node<T>>) {
-        let mut new_shared_node = Shared::from(new_node);
+        let mut new_node = NonNull::from(new_node);
 
         {
-            let n = unsafe { new_shared_node.as_mut() };
+            let n = unsafe { new_node.as_mut() };
             n.next = None;
             n.prev = self.tail.prev;
         }
 
-        let new_shared_node = Some(new_shared_node);
+        let new_node = Some(new_node);
         match self.tail.prev {
-            None => self.head.next = new_shared_node,
-            Some(mut tail) => unsafe { tail.as_mut().next = new_shared_node },
+            None => self.head.next = new_node,
+            Some(mut tail) => unsafe { tail.as_mut().next = new_node },
         }
 
-        self.tail.prev = new_shared_node;
+        self.tail.prev = new_node;
     }
 
     pub fn pop_front(&mut self) -> Option<Unique<Node<T>>> {

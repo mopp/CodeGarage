@@ -244,17 +244,19 @@ mod tests {
     #[test]
     fn test_pop_front() {
         let objs = allocate_node_objs::<Node<usize>>(128);
+        let size = objs.len();
 
         let mut list = LinkedList::new();
-        for (i, o) in objs.iter_mut().enumerate() {
-            o.element = i;
+        for (index, node) in objs.iter_mut().enumerate() {
+            node.element = index;
 
-            list.push_front(unsafe { Unique::new_unchecked(o) });
+            let unique = unsafe { Unique::new_unchecked(node) };
+            list.push_front(unique);
         }
 
         assert_eq!(list.len(), objs.len());
         assert_eq!(list.back(), Some(&0usize));
-        assert_eq!(list.front(), Some(&(objs.len() - 1)));
+        assert_eq!(list.front(), Some(&(size - 1)));
 
         for i in (0..objs.len()).rev() {
             match list.pop_front() {
@@ -264,6 +266,7 @@ mod tests {
                 }
             }
         }
+        assert_eq!(list.len(), 0);
     }
 
     #[test]

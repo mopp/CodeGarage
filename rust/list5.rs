@@ -64,11 +64,11 @@ impl<T> LinkedList<T> {
         cnt
     }
 
-    pub fn front(&self) -> Option<&T> {
+    pub fn head(&self) -> Option<&T> {
         unsafe { self.head.next.as_ref().map(|node| &node.as_ref().element) }
     }
 
-    pub fn front_mut(&mut self) -> Option<&mut T> {
+    pub fn head_mut(&mut self) -> Option<&mut T> {
         unsafe {
             self.head
                 .next
@@ -77,11 +77,11 @@ impl<T> LinkedList<T> {
         }
     }
 
-    pub fn back(&self) -> Option<&T> {
+    pub fn tail(&self) -> Option<&T> {
         unsafe { self.tail.prev.as_ref().map(|node| &node.as_ref().element) }
     }
 
-    pub fn back_mut(&mut self) -> Option<&mut T> {
+    pub fn tail_mut(&mut self) -> Option<&mut T> {
         unsafe {
             self.tail
                 .prev
@@ -90,7 +90,7 @@ impl<T> LinkedList<T> {
         }
     }
 
-    pub fn push_front(&mut self, new_node: Unique<Node<T>>) {
+    pub fn push_head(&mut self, new_node: Unique<Node<T>>) {
         let mut new_head = NonNull::from(new_node);
 
         {
@@ -108,7 +108,7 @@ impl<T> LinkedList<T> {
         self.head.next = new_head;
     }
 
-    pub fn push_back(&mut self, new_node: Unique<Node<T>>) {
+    pub fn push_tail(&mut self, new_node: Unique<Node<T>>) {
         let mut new_node = NonNull::from(new_node);
 
         {
@@ -126,7 +126,7 @@ impl<T> LinkedList<T> {
         self.tail.prev = new_node;
     }
 
-    pub fn pop_front(&mut self) -> Option<Unique<Node<T>>> {
+    pub fn pop_head(&mut self) -> Option<Unique<Node<T>>> {
         match self.head.next {
             None => None,
             Some(head) => {
@@ -142,7 +142,7 @@ impl<T> LinkedList<T> {
         }
     }
 
-    pub fn pop_back(&mut self) -> Option<Unique<Node<T>>> {
+    pub fn pop_tail(&mut self) -> Option<Unique<Node<T>>> {
         match self.tail.prev {
             None => None,
             Some(tail) => {
@@ -224,38 +224,38 @@ mod tests {
         let mut list = LinkedList::<usize>::new();
 
         assert_eq!(list.len(), 0);
-        assert_eq!(list.front(), None);
-        assert_eq!(list.back(), None);
-        assert_eq!(list.front_mut(), None);
-        assert_eq!(list.back_mut(), None);
-        assert_eq!(list.pop_front().is_none(), true);
-        assert_eq!(list.pop_back().is_none(), true);
+        assert_eq!(list.head(), None);
+        assert_eq!(list.tail(), None);
+        assert_eq!(list.head_mut(), None);
+        assert_eq!(list.tail_mut(), None);
+        assert_eq!(list.pop_head().is_none(), true);
+        assert_eq!(list.pop_tail().is_none(), true);
     }
 
     #[test]
-    fn test_push_front() {
+    fn test_push_head() {
         let objs = allocate_node_objs::<Node<usize>>(1024);
 
         let mut list = LinkedList::new();
-        list.push_front(unsafe { Unique::new_unchecked(&mut objs[0]) });
+        list.push_head(unsafe { Unique::new_unchecked(&mut objs[0]) });
         assert_eq!(list.len(), 1);
-        assert_eq!(list.back(), Some(&0usize));
-        assert_eq!(list.front(), Some(&0usize));
+        assert_eq!(list.tail(), Some(&0usize));
+        assert_eq!(list.head(), Some(&0usize));
     }
 
     #[test]
-    fn test_push_back() {
+    fn test_push_tail() {
         let objs = allocate_node_objs::<Node<usize>>(1024);
 
         let mut list = LinkedList::new();
-        list.push_back(unsafe { Unique::new_unchecked(&mut objs[1]) });
+        list.push_tail(unsafe { Unique::new_unchecked(&mut objs[1]) });
         assert_eq!(list.len(), 1);
-        assert_eq!(list.back(), Some(&0usize));
-        assert_eq!(list.front(), Some(&0usize));
+        assert_eq!(list.tail(), Some(&0usize));
+        assert_eq!(list.head(), Some(&0usize));
     }
 
     #[test]
-    fn test_pop_front() {
+    fn test_pop_head() {
         let objs = allocate_node_objs::<Node<usize>>(128);
         let size = objs.len();
 
@@ -264,15 +264,15 @@ mod tests {
             node.element = index;
 
             let unique = unsafe { Unique::new_unchecked(node) };
-            list.push_front(unique);
+            list.push_head(unique);
         }
 
         assert_eq!(list.len(), objs.len());
-        assert_eq!(list.back(), Some(&0usize));
-        assert_eq!(list.front(), Some(&(size - 1)));
+        assert_eq!(list.tail(), Some(&0usize));
+        assert_eq!(list.head(), Some(&(size - 1)));
 
         for i in (0..objs.len()).rev() {
-            match list.pop_front() {
+            match list.pop_head() {
                 None => panic!("error"),
                 Some(node) => {
                     assert_eq!(i, unsafe { node.as_ref().element });
@@ -290,16 +290,16 @@ mod tests {
         for (i, o) in objs.iter_mut().enumerate() {
             o.element = i;
 
-            list.push_front(unsafe { Unique::new_unchecked(o) });
+            list.push_head(unsafe { Unique::new_unchecked(o) });
         }
 
         assert_eq!(list.len(), objs.len());
-        assert_eq!(list.back_mut(), Some(&mut 0));
-        assert_eq!(list.pop_back().is_some(), true);
+        assert_eq!(list.tail_mut(), Some(&mut 0));
+        assert_eq!(list.pop_tail().is_some(), true);
 
-        *list.front_mut().unwrap() = 10;
-        assert_eq!(list.front(), Some(&10));
-        match list.pop_front() {
+        *list.head_mut().unwrap() = 10;
+        assert_eq!(list.head(), Some(&10));
+        match list.pop_head() {
             None => panic!("error"),
             Some(node) => {
                 assert_eq!(unsafe { node.as_ref().element }, 10);
@@ -336,11 +336,11 @@ mod tests {
             f.order = 0;
             f.is_alloc = false;
 
-            list1.push_front(unsafe { Unique::new_unchecked(f) });
+            list1.push_head(unsafe { Unique::new_unchecked(f) });
         }
         assert_eq!(list1.len(), SIZE);
 
-        match list1.front() {
+        match list1.head() {
             Some(frame) => assert_eq!(frame.order, 0),
             None => panic!("error"),
         }
@@ -348,8 +348,8 @@ mod tests {
         // Move the all element into list2 from list1.
         let mut list2 = LinkedList::new();
         loop {
-            match list1.pop_front() {
-                Some(n) => list2.push_back(n),
+            match list1.pop_head() {
+                Some(n) => list2.push_tail(n),
                 None => break,
             }
         }

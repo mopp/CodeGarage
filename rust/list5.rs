@@ -4,7 +4,6 @@
 #![feature(ptr_internals)]
 #![cfg_attr(test, feature(allocator_api))]
 
-use std::convert::{AsMut, AsRef};
 use std::ops::{Deref, DerefMut};
 use std::ptr::{NonNull, Unique};
 use std::mem;
@@ -176,18 +175,6 @@ impl<T> Node<T> {
     }
 }
 
-impl<T> AsRef<T> for Node<T> {
-    fn as_ref(&self) -> &T {
-        &self.element
-    }
-}
-
-impl<T> AsMut<T> for Node<T> {
-    fn as_mut(&mut self) -> &mut T {
-        &mut self.element
-    }
-}
-
 impl<T> Deref for Node<T> {
     type Target = T;
 
@@ -202,14 +189,33 @@ impl<T> DerefMut for Node<T> {
     }
 }
 
+trait Getter<T> {
+    fn get(&self) -> &T;
+    fn get_mut(&mut self) -> &mut T;
+}
+
+impl<T> Getter<T> for Unique<Node<T>> {
+    fn get(&self) -> &T {
+        unsafe { self.as_ref().deref() }
+    }
+
+    fn get_mut(&mut self) -> &mut T {
+        unsafe { self.as_mut().deref_mut() }
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{LinkedList, Node};
+    use super::*;
 
     use std::heap::{Alloc, Layout, System};
-    use std::mem;
     use std::slice;
-    use std::ptr::Unique;
+
+    #[derive(PartialEq, Eq, Debug, Clone)]
+    struct Frame {
+        order: u8,
+        is_alloc: bool,
+    }
 
     fn allocate_node_objs<'a, T>(count: usize) -> &'a mut [T] {
         let type_size = mem::size_of::<T>();
@@ -221,7 +227,7 @@ mod tests {
 
     #[test]
     fn test_new() {
-        let mut list = LinkedList::<usize>::new();
+        let mut list = LinkedList::<Frame>::new();
 
         assert_eq!(list.len(), 0);
         assert_eq!(list.head(), None);
@@ -234,24 +240,148 @@ mod tests {
 
     #[test]
     fn test_push_head() {
-        let objs = allocate_node_objs::<Node<usize>>(1024);
+        const SIZE: usize = 32;
+        let objs = allocate_node_objs::<Node<Frame>>(SIZE);
+
+        let mut cnt = 0;
+        for f in objs.as_mut() {
+            f.order = cnt;
+            f.is_alloc = false;
+            cnt += 1;
+        }
 
         let mut list = LinkedList::new();
-        list.push_head(unsafe { Unique::new_unchecked(&mut objs[0]) });
-        assert_eq!(list.len(), 1);
-        assert_eq!(list.tail(), Some(&0usize));
-        assert_eq!(list.head(), Some(&0usize));
+
+        {
+            list.push_head(unsafe { Unique::new_unchecked(&mut objs[0]) });
+
+            let f = &objs[0];
+            assert_eq!(list.len(), 1);
+            assert_eq!(list.tail().unwrap(), f.deref());
+            assert_eq!(list.head().unwrap(), f.deref());
+
+            assert_eq!(list.pop_tail().unwrap().get(), f.deref());
+
+            assert_eq!(list.len(), 0);
+            assert_eq!(list.head(), None);
+            assert_eq!(list.tail(), None);
+            assert_eq!(list.head_mut(), None);
+            assert_eq!(list.tail_mut(), None);
+            assert_eq!(list.pop_head().is_none(), true);
+            assert_eq!(list.pop_tail().is_none(), true);
+        }
+
+        {
+            list.push_head(unsafe { Unique::new_unchecked(&mut objs[0]) });
+
+            let f = &objs[0];
+            assert_eq!(list.len(), 1);
+            assert_eq!(list.tail().unwrap(), f.deref());
+            assert_eq!(list.head().unwrap(), f.deref());
+
+            assert_eq!(list.pop_tail().unwrap().get(), f.deref());
+
+            assert_eq!(list.len(), 0);
+            assert_eq!(list.head(), None);
+            assert_eq!(list.tail(), None);
+            assert_eq!(list.head_mut(), None);
+            assert_eq!(list.tail_mut(), None);
+            assert_eq!(list.pop_head().is_none(), true);
+            assert_eq!(list.pop_tail().is_none(), true);
+        }
+
+        {
+            list.push_head(unsafe { Unique::new_unchecked(&mut objs[0]) });
+            list.push_head(unsafe { Unique::new_unchecked(&mut objs[1]) });
+            list.push_head(unsafe { Unique::new_unchecked(&mut objs[2]) });
+            let f0 = &objs[0];
+            let f1 = &objs[1];
+            let f2 = &objs[2];
+
+            assert_eq!(list.len(), 3);
+            assert_eq!(list.tail().unwrap(), f0.deref());
+            assert_eq!(list.head().unwrap(), f2.deref());
+
+            assert_eq!(list.pop_head().unwrap().get(), f2.deref());
+            assert_eq!(list.pop_tail().unwrap().get(), f0.deref());
+
+            assert_eq!(list.len(), 1);
+            assert_eq!(list.tail().unwrap(), f1.deref());
+            assert_eq!(list.head().unwrap(), f1.deref());
+        }
     }
 
     #[test]
     fn test_push_tail() {
-        let objs = allocate_node_objs::<Node<usize>>(1024);
+        const SIZE: usize = 32;
+        let objs = allocate_node_objs::<Node<Frame>>(SIZE);
+
+        let mut cnt = 0;
+        for f in objs.as_mut() {
+            f.order = cnt;
+            f.is_alloc = false;
+            cnt += 1;
+        }
 
         let mut list = LinkedList::new();
-        list.push_tail(unsafe { Unique::new_unchecked(&mut objs[1]) });
-        assert_eq!(list.len(), 1);
-        assert_eq!(list.tail(), Some(&0usize));
-        assert_eq!(list.head(), Some(&0usize));
+
+        {
+            list.push_tail(unsafe { Unique::new_unchecked(&mut objs[0]) });
+
+            let f = &objs[0];
+            assert_eq!(list.len(), 1);
+            assert_eq!(list.tail().unwrap(), f.deref());
+            assert_eq!(list.head().unwrap(), f.deref());
+
+            assert_eq!(list.pop_tail().unwrap().get(), f.deref());
+
+            assert_eq!(list.len(), 0);
+            assert_eq!(list.head(), None);
+            assert_eq!(list.tail(), None);
+            assert_eq!(list.head_mut(), None);
+            assert_eq!(list.tail_mut(), None);
+            assert_eq!(list.pop_head().is_none(), true);
+            assert_eq!(list.pop_tail().is_none(), true);
+        }
+
+        {
+            list.push_tail(unsafe { Unique::new_unchecked(&mut objs[0]) });
+
+            let f = &objs[0];
+            assert_eq!(list.len(), 1);
+            assert_eq!(list.tail().unwrap(), f.deref());
+            assert_eq!(list.head().unwrap(), f.deref());
+
+            assert_eq!(list.pop_tail().unwrap().get(), f.deref());
+
+            assert_eq!(list.len(), 0);
+            assert_eq!(list.head(), None);
+            assert_eq!(list.tail(), None);
+            assert_eq!(list.head_mut(), None);
+            assert_eq!(list.tail_mut(), None);
+            assert_eq!(list.pop_head().is_none(), true);
+            assert_eq!(list.pop_tail().is_none(), true);
+        }
+
+        {
+            list.push_tail(unsafe { Unique::new_unchecked(&mut objs[0]) });
+            list.push_tail(unsafe { Unique::new_unchecked(&mut objs[1]) });
+            list.push_tail(unsafe { Unique::new_unchecked(&mut objs[2]) });
+            let f0 = &objs[0];
+            let f1 = &objs[1];
+            let f2 = &objs[2];
+
+            assert_eq!(list.len(), 3);
+            assert_eq!(list.head().unwrap(), f0.deref());
+            assert_eq!(list.tail().unwrap(), f2.deref());
+
+            assert_eq!(list.pop_tail().unwrap().get(), f2.deref());
+            assert_eq!(list.pop_head().unwrap().get(), f0.deref());
+
+            assert_eq!(list.len(), 1);
+            assert_eq!(list.tail().unwrap(), f1.deref());
+            assert_eq!(list.head().unwrap(), f1.deref());
+        }
     }
 
     #[test]
@@ -272,12 +402,7 @@ mod tests {
         assert_eq!(list.head(), Some(&(size - 1)));
 
         for i in (0..objs.len()).rev() {
-            match list.pop_head() {
-                None => panic!("error"),
-                Some(node) => {
-                    assert_eq!(i, unsafe { node.as_ref().element });
-                }
-            }
+            assert_eq!(&i, list.pop_head().unwrap().get());
         }
         assert_eq!(list.len(), 0);
     }
@@ -299,12 +424,7 @@ mod tests {
 
         *list.head_mut().unwrap() = 10;
         assert_eq!(list.head(), Some(&10));
-        match list.pop_head() {
-            None => panic!("error"),
-            Some(node) => {
-                assert_eq!(unsafe { node.as_ref().element }, 10);
-            }
-        }
+        assert_eq!(list.pop_head().unwrap().get(), &10);
         assert_eq!(list.len(), objs.len() - 2);
 
         objs[1].detach();
@@ -312,23 +432,19 @@ mod tests {
         assert_eq!(
             list.head.next.unwrap().as_ptr(),
             &mut objs[128 - 2] as *mut _
-        );
+            );
         assert_eq!(list.head.prev.is_none(), true);
         assert_eq!(list.tail.next.is_none(), true);
         assert_eq!(list.tail.prev.unwrap().as_ptr(), &mut objs[1] as *mut _);
 
-        *(objs[0].as_mut()) = 10;
-        assert_eq!(objs[0].as_ref(), &10);
-    }
-
-    struct Frame {
-        order: u8,
-        is_alloc: bool,
+        *objs[0] = 10;
+        assert_eq!(*objs[0], 10);
     }
 
     #[test]
     fn test_usage() {
         const SIZE: usize = 128;
+
         let objs = allocate_node_objs::<Node<Frame>>(SIZE);
 
         let mut list1 = LinkedList::new();

@@ -220,6 +220,19 @@ mod tests {
     }
 
     #[test]
+    fn test_new() {
+        let mut list = LinkedList::<usize>::new();
+
+        assert_eq!(list.len(), 0);
+        assert_eq!(list.front(), None);
+        assert_eq!(list.back(), None);
+        assert_eq!(list.front_mut(), None);
+        assert_eq!(list.back_mut(), None);
+        assert_eq!(list.pop_front().is_none(), true);
+        assert_eq!(list.pop_back().is_none(), true);
+    }
+
+    #[test]
     fn test_push_front() {
         let objs = allocate_node_objs::<Node<usize>>(1024);
 

@@ -262,7 +262,7 @@ mod tests {
         assert_eq!(list.head_mut().is_some(), true);
         assert_eq!(list.tail_mut().is_some(), true);
         assert_eq!(list.pop_head().is_some(), true);
-        assert_eq!(list.pop_tail().is_some(), true;
+        assert_eq!(list.pop_tail().is_some(), true);
     }
 
     #[test]
@@ -469,33 +469,29 @@ mod tests {
     }
 
     #[test]
-    fn test_usage() {
+    fn test_move_nodes_into_another_list() {
         const SIZE: usize = 128;
-
         let objs = allocate_node_objs::<Node<Frame>>(SIZE);
 
-        let mut list1 = LinkedList::new();
-        for f in objs {
+        for f in objs.iter_mut() {
             f.order = 0;
             f.is_alloc = false;
-
-            list1.push_head(unsafe { Unique::new_unchecked(f) });
-        }
-        assert_eq!(list1.len(), SIZE);
-
-        match list1.head() {
-            Some(frame) => assert_eq!(frame.order, 0),
-            None => panic!("error"),
         }
 
-        // Move the all element into list2 from list1.
+        let mut list1 = LinkedList::with_nodes(&mut objs[0] as *mut Node<Frame>, SIZE).unwrap();
         let mut list2 = LinkedList::new();
+
+        assert_eq!(list1.len(), SIZE);
+        assert_eq!(list2.len(), 0);
+
         loop {
-            match list1.pop_head() {
-                Some(n) => list2.push_tail(n),
-                None => break,
+            if let Some(n) = list1.pop_head()  {
+                list2.push_tail(n)
+            } else {
+                break;
             }
         }
+
         assert_eq!(list1.len(), 0);
         assert_eq!(list2.len(), SIZE);
     }

@@ -43,6 +43,22 @@ impl<T> LinkedList<T> {
         }
     }
 
+    pub fn with_nodes(nodes: *mut Node<T>, count: usize) -> Option<LinkedList<T>> {
+        let mut list = LinkedList::new();
+
+        for i in 0..count {
+            let n = unsafe { nodes.offset(i as isize) };
+
+            if let Some(node) = Unique::new(n) {
+                list.push_tail(node);
+            } else {
+                return None;
+            }
+        }
+
+        return Some(list);
+    }
+
     pub fn len(&self) -> usize {
         let mut node = if let Some(ref head) = self.head.next {
             unsafe { head.as_ref() }
@@ -236,6 +252,17 @@ mod tests {
         assert_eq!(list.tail_mut(), None);
         assert_eq!(list.pop_head().is_none(), true);
         assert_eq!(list.pop_tail().is_none(), true);
+
+        const SIZE: usize = 128;
+        let objs = allocate_node_objs::<Node<Frame>>(SIZE);
+        let mut list = LinkedList::with_nodes(&mut objs[0] as *mut _, SIZE).unwrap();
+        assert_eq!(list.len(), SIZE);
+        assert_eq!(list.head().is_some(), true);
+        assert_eq!(list.tail().is_some(), true);
+        assert_eq!(list.head_mut().is_some(), true);
+        assert_eq!(list.tail_mut().is_some(), true);
+        assert_eq!(list.pop_head().is_some(), true);
+        assert_eq!(list.pop_tail().is_some(), true;
     }
 
     #[test]

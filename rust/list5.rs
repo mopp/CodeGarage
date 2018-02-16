@@ -469,6 +469,26 @@ mod tests {
     }
 
     #[test]
+    fn test_detach() {
+        const SIZE: usize = 128;
+        let objs = allocate_node_objs::<Node<Frame>>(SIZE);
+
+        for f in objs.iter_mut() {
+            f.order = 0;
+            f.is_alloc = false;
+        }
+
+        let list = LinkedList::with_nodes(&mut objs[0] as *mut Node<Frame>, SIZE).unwrap();
+        assert_eq!(list.len(), SIZE);
+
+        objs[10].detach();
+        assert_eq!(list.len(), SIZE - 1);
+
+        objs[0].detach();
+        assert_eq!(list.len(), SIZE - 2);
+    }
+
+    #[test]
     fn test_move_nodes_into_another_list() {
         const SIZE: usize = 128;
         let objs = allocate_node_objs::<Node<Frame>>(SIZE);

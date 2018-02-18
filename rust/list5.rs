@@ -115,9 +115,10 @@ impl<T> LinkedList<T> {
         }
 
         let new_head = Some(new_head);
-        match self.head.next {
-            None => self.tail.prev = new_head,
-            Some(mut old_head) => unsafe { old_head.as_mut().prev = new_head },
+        if let Some(mut old_head) = self.head.next {
+            unsafe { old_head.as_mut().prev = new_head }
+        } else {
+            self.tail.prev = new_head
         }
 
         self.head.next = new_head;
@@ -133,9 +134,10 @@ impl<T> LinkedList<T> {
         }
 
         let new_node = Some(new_node);
-        match self.tail.prev {
-            None => self.head.next = new_node,
-            Some(mut tail) => unsafe { tail.as_mut().next = new_node },
+        if let Some(mut tail) = self.tail.prev {
+            unsafe { tail.as_mut().next = new_node };
+        } else {
+            self.head.next = new_node;
         }
 
         self.tail.prev = new_node;

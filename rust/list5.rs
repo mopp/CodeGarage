@@ -243,7 +243,7 @@ mod tests {
     }
 
     #[test]
-    fn test_new() {
+    fn new() {
         let mut list = LinkedList::<Frame>::new();
 
         assert_eq!(list.len(), 0);
@@ -267,7 +267,7 @@ mod tests {
     }
 
     #[test]
-    fn test_push_head() {
+    fn push_head() {
         const SIZE: usize = 32;
         let objs = allocate_node_objs::<Node<Frame>>(SIZE);
 
@@ -340,7 +340,7 @@ mod tests {
     }
 
     #[test]
-    fn test_push_tail() {
+    fn push_tail() {
         const SIZE: usize = 32;
         let objs = allocate_node_objs::<Node<Frame>>(SIZE);
 
@@ -413,7 +413,7 @@ mod tests {
     }
 
     #[test]
-    fn test_pop_head() {
+    fn pop_head() {
         let objs = allocate_node_objs::<Node<usize>>(128);
         let size = objs.len();
 
@@ -436,7 +436,7 @@ mod tests {
     }
 
     #[test]
-    fn test_pop_tail() {
+    fn pop_tail() {
         let objs = allocate_node_objs::<Node<usize>>(128);
         let size = objs.len();
 
@@ -459,7 +459,7 @@ mod tests {
     }
 
     #[test]
-    fn test_move_nodes_into_another_list() {
+    fn move_nodes_into_another_list() {
         const SIZE: usize = 128;
         let objs = allocate_node_objs::<Node<Frame>>(SIZE);
 

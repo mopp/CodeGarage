@@ -54,22 +54,23 @@ impl<T> LinkedList<T> {
     }
 
     pub fn count_nodes(&self) -> usize {
-        let mut node = match self.head {
-            None => return 0,
-            Some(ref head) => unsafe {head.as_ref()}
-        };
+        let mut node;
+
+        if let Some(ref head) = self.head {
+            node = unsafe {head.as_ref()}
+        } else {
+            return 0;
+        }
 
         let mut cnt = 1;
         loop {
-            match node.next {
-                None => break,
-                Some(ref next) => {
-                    node = unsafe { next.as_ref() };
-                    cnt += 1;
-                }
+            if let Some(ref next) = node.next  {
+                node = unsafe { next.as_ref() };
+                cnt += 1;
+            } else {
+                break cnt
             }
         }
-        cnt
     }
 
     pub fn len(&self) -> usize {
@@ -157,58 +158,58 @@ impl<T> LinkedList<T> {
     }
 
     pub fn pop_head(&mut self) -> Option<Unique<Node<T>>> {
-        match self.head {
-            None => None,
-            Some(head) => {
-                self.head= unsafe { head.as_ref().next };
+        if let Some(head) = self.head {
+            self.head= unsafe { head.as_ref().next };
 
-                match self.head {
-                    None =>
-                        self.tail = None,
-                        Some(mut new_head) =>
-                            unsafe { new_head.as_mut().prev = None },
-                }
-
-                self.length -= 1;
-                unsafe { Some(Unique::new_unchecked(head.as_ptr())) }
+            if let Some(mut new_head) = self.head {
+                unsafe { new_head.as_mut().prev = None };
+            } else {
+                self.tail = None;
             }
+
+            self.length -= 1;
+            unsafe { Some(Unique::new_unchecked(head.as_ptr())) }
+        } else {
+            None
         }
     }
 
     pub fn pop_tail(&mut self) -> Option<Unique<Node<T>>> {
-        match self.tail {
-            None => None,
-            Some(tail) => {
-                self.tail = unsafe { tail.as_ref().prev };
+        if let Some(tail) = self.tail  {
+            self.tail = unsafe { tail.as_ref().prev };
 
-                match self.tail {
-                    None => self.head = None,
-                    Some(mut new_tail) => unsafe { new_tail.as_mut().next = None },
-                }
-
-                self.length -= 1;
-                unsafe { Some(Unique::new_unchecked(tail.as_ptr())) }
+            if let Some(mut new_tail) =  self.tail{
+                unsafe { new_tail.as_mut().next = None };
+            } else {
+                self.head = None;
             }
+
+            self.length -= 1;
+            unsafe { Some(Unique::new_unchecked(tail.as_ptr())) }
+        } else {
+            None
         }
     }
 
     pub fn member(&self, target_node: Unique<Node<T>>) -> bool {
-        let mut node = match self.head {
-            None => return false,
-            Some(ref head) => unsafe {head.as_ref()}
-        };
-
         let target_node = unsafe { target_node.as_ref() };
+        let mut node;
+
+        if let Some(ref head) = self.head {
+            node = unsafe {head.as_ref()}
+        } else {
+            return false;
+        }
+
         loop {
             if ptr::eq(node, target_node) {
                 break true;
             }
 
-            match node.next {
-                None => break false,
-                Some(ref next) => {
-                    node = unsafe { next.as_ref() };
-                }
+            if let Some(ref next) = node.next  {
+                node = unsafe { next.as_ref() };
+            } else {
+                break false
             }
         }
     }
@@ -224,51 +225,47 @@ impl<T> LinkedList<T> {
         let node = unsafe {node.as_mut()};
 
         // Check the head equals the given node.
-        match self.head {
-            Some(mut head) => {
-                let head = unsafe { head.as_mut() };
-                if ptr::eq(head, node) {
-                    self.length -= 1;
-                    self.head = head.next;
-                    if let Some(mut next) = head.next {
-                        unsafe { next.as_mut().prev = None };
-                    } else {
-                        // This list has no element.
-                        self.tail = None;
-                    }
-
-                    node.next = None;
-                    node.prev = None;
-
-                    return Ok(());
+        if let Some(mut head) = self.head {
+            let head = unsafe { head.as_mut() };
+            if ptr::eq(head, node) {
+                self.length -= 1;
+                self.head = head.next;
+                if let Some(mut next) = head.next {
+                    unsafe { next.as_mut().prev = None };
+                } else {
+                    // This list has no element.
+                    self.tail = None;
                 }
-            },
-            None =>
-                return Err("ERROR: no head".to_string())
+
+                node.next = None;
+                node.prev = None;
+
+                return Ok(());
+            }
+        } else {
+            return Err("ERROR: no head".to_string());
         }
 
         // Check the tail equals the given node.
-        match self.tail {
-            Some(mut tail) => {
-                let tail = unsafe { tail.as_mut() };
-                if ptr::eq(tail, node) {
-                    self.length -= 1;
-                    self.tail = tail.prev;
-                    if let Some(mut prev) = tail.prev {
-                        unsafe { prev.as_mut().next = None };
-                    } else {
-                        // This list has no element.
-                        self.head = None;
-                    }
-
-                    node.next = None;
-                    node.prev = None;
-
-                    return Ok(());
+        if let Some(mut tail) = self.tail{
+            let tail = unsafe { tail.as_mut() };
+            if ptr::eq(tail, node) {
+                self.length -= 1;
+                self.tail = tail.prev;
+                if let Some(mut prev) = tail.prev {
+                    unsafe { prev.as_mut().next = None };
+                } else {
+                    // this list has no element.
+                    self.head = None;
                 }
-            },
-            None =>
-                return Err("ERROR: no head".to_string())
+
+                node.next = None;
+                node.prev = None;
+
+                return Ok(());
+            }
+        } else {
+            return Err("ERROR: no head".to_string())
         }
 
         if let (Some(mut next), Some(mut prev)) = (node.next,  node.prev) {

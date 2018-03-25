@@ -424,6 +424,29 @@ mod tests {
     }
 
     #[test]
+    fn test_pop_tail() {
+        let objs = allocate_node_objs::<Node<usize>>(128);
+        let size = objs.len();
+
+        let mut list = LinkedList::new();
+        for (index, node) in objs.iter_mut().enumerate() {
+            node.element = index;
+
+            let unique = unsafe { Unique::new_unchecked(node) };
+            list.push_head(unique);
+        }
+
+        assert_eq!(list.len(), objs.len());
+        assert_eq!(list.tail(), Some(&0usize));
+        assert_eq!(list.head(), Some(&(size - 1)));
+
+        for i in 0..objs.len() {
+            assert_eq!(&i, list.pop_tail().unwrap().get());
+        }
+        assert_eq!(list.len(), 0);
+    }
+
+    #[test]
     fn test_move_nodes_into_another_list() {
         const SIZE: usize = 128;
         let objs = allocate_node_objs::<Node<Frame>>(SIZE);

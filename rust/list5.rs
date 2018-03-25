@@ -5,6 +5,7 @@
 #![cfg_attr(test, feature(allocator_api))]
 
 use std::ops::{Deref, DerefMut};
+use std::ptr;
 use std::ptr::{NonNull, Unique};
 use std::mem;
 
@@ -188,6 +189,97 @@ impl<T> LinkedList<T> {
                 self.length -= 1;
                 unsafe { Some(Unique::new_unchecked(tail.as_ptr())) }
             }
+        }
+    }
+
+    pub fn member(&self, target_node: Unique<Node<T>>) -> bool {
+        let mut node = match self.head {
+            None => return false,
+            Some(ref head) => unsafe {head.as_ref()}
+        };
+
+        let target_node = unsafe { target_node.as_ref() };
+        loop {
+            if ptr::eq(node, target_node) {
+                break true;
+            }
+
+            match node.next {
+                None => break false,
+                Some(ref next) => {
+                    node = unsafe { next.as_ref() };
+                }
+            }
+        }
+    }
+
+    pub fn detach(&mut self, mut node: Unique<Node<T>>) -> Result<(), String> {
+        if self.len() == 0 {
+            return Err("The list does not has any nodes.".to_string());
+        }
+
+        debug_assert!(self.head.is_some() && self.tail.is_some());
+        debug_assert!(self.member(node));
+
+        let node = unsafe {node.as_mut()};
+
+        // Check the head equals the given node.
+        match self.head {
+            Some(mut head) => {
+                let head = unsafe { head.as_mut() };
+                if ptr::eq(head, node) {
+                    self.length -= 1;
+                    self.head = head.next;
+                    if let Some(mut next) = head.next {
+                        unsafe { next.as_mut().prev = None };
+                    } else {
+                        // This list has no element.
+                        self.tail = None;
+                    }
+
+                    node.next = None;
+                    node.prev = None;
+
+                    return Ok(());
+                }
+            },
+            None =>
+                return Err("ERROR: no head".to_string())
+        }
+
+        // Check the tail equals the given node.
+        match self.tail {
+            Some(mut tail) => {
+                let tail = unsafe { tail.as_mut() };
+                if ptr::eq(tail, node) {
+                    self.length -= 1;
+                    self.tail = tail.prev;
+                    if let Some(mut prev) = tail.prev {
+                        unsafe { prev.as_mut().next = None };
+                    } else {
+                        // This list has no element.
+                        self.head = None;
+                    }
+
+                    node.next = None;
+                    node.prev = None;
+
+                    return Ok(());
+                }
+            },
+            None =>
+                return Err("ERROR: no head".to_string())
+        }
+
+        if let (Some(mut next), Some(mut prev)) = (node.next,  node.prev) {
+            unsafe {
+                self.length -= 1;
+                next.as_mut().prev = Some(prev);
+                prev.as_mut().next = Some(next);
+                Ok(())
+            }
+        } else {
+            Err("ERROR: link broken.".to_string())
         }
     }
 }
@@ -484,5 +576,26 @@ mod tests {
 
         assert_eq!(list1.len(), 0);
         assert_eq!(list2.len(), SIZE);
+    }
+
+    #[test]
+    fn detach() {
+        const SIZE: usize = 128;
+        let objs = allocate_node_objs::<Node<Frame>>(SIZE);
+        let mut list1 = LinkedList::with_nodes(&mut objs[0] as *mut Node<Frame>, SIZE).unwrap();
+
+        assert_eq!(list1.len(), SIZE);
+
+        let n = unsafe { Unique::new_unchecked(&mut objs[0]) };
+        assert_eq!(list1.detach(n), Ok(()));
+        assert_eq!(list1.len(), SIZE - 1);
+
+        let n = unsafe { Unique::new_unchecked(&mut objs[SIZE - 1]) };
+        assert_eq!(list1.detach(n), Ok(()));
+        assert_eq!(list1.len(), SIZE - 2);
+
+        let n = unsafe { Unique::new_unchecked(&mut objs[SIZE / 2]) };
+        assert_eq!(list1.detach(n), Ok(()));
+        assert_eq!(list1.len(), SIZE - 3);
     }
 }

@@ -18,6 +18,7 @@ type Link<T> = NonNull<Node<T>>;
 pub struct LinkedList<T> {
     head: Option<Link<T>>,
     tail: Option<Link<T>>,
+    length: usize,
 }
 
 pub struct Node<T> {
@@ -31,6 +32,7 @@ impl<T> LinkedList<T> {
         LinkedList {
             head: None,
             tail: None,
+            length: 0,
         }
     }
 
@@ -50,7 +52,7 @@ impl<T> LinkedList<T> {
         return Some(list);
     }
 
-    pub fn len(&self) -> usize {
+    pub fn count_nodes(&self) -> usize {
         let mut node = match self.head {
             None => return 0,
             Some(ref head) => unsafe {head.as_ref()}
@@ -67,6 +69,12 @@ impl<T> LinkedList<T> {
             }
         }
         cnt
+    }
+
+    pub fn len(&self) -> usize {
+        debug_assert!(self.length == self.count_nodes());
+
+        self.length
     }
 
     pub fn head(&self) -> Option<&T> {
@@ -121,6 +129,7 @@ impl<T> LinkedList<T> {
         }
 
         self.head = Some(new_node);
+        self.length += 1;
     }
 
     pub fn push_tail(&mut self, new_node: Unique<Node<T>>) {
@@ -143,6 +152,7 @@ impl<T> LinkedList<T> {
         }
 
         self.tail = Some(new_node);
+        self.length += 1;
     }
 
     pub fn pop_head(&mut self) -> Option<Unique<Node<T>>> {
@@ -158,6 +168,7 @@ impl<T> LinkedList<T> {
                             unsafe { new_head.as_mut().prev = None },
                 }
 
+                self.length -= 1;
                 unsafe { Some(Unique::new_unchecked(head.as_ptr())) }
             }
         }
@@ -174,6 +185,7 @@ impl<T> LinkedList<T> {
                     Some(mut new_tail) => unsafe { new_tail.as_mut().next = None },
                 }
 
+                self.length -= 1;
                 unsafe { Some(Unique::new_unchecked(tail.as_ptr())) }
             }
         }

@@ -7,7 +7,6 @@
 use std::ops::{Deref, DerefMut};
 use std::ptr;
 use std::ptr::{NonNull, Unique};
-use std::mem;
 
 type Link<T> = NonNull<Node<T>>;
 
@@ -315,6 +314,7 @@ mod tests {
     use super::*;
 
     use std::heap::{Alloc, Layout, System};
+    use std::mem;
     use std::slice;
 
     #[derive(PartialEq, Eq, Debug, Clone)]

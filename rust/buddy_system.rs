@@ -1,5 +1,6 @@
 #![cfg_attr(test, feature(allocator_api))]
 #![feature(offset_to)]
+#![feature(ptr_internals)]
 #![feature(unique)]
 
 extern crate list5;
@@ -29,12 +30,9 @@ struct BuddyManager {
 }
 
 impl BuddyManager {
-    fn new(
-        nodes: *mut Node<Frame>,
-        count: usize,
-        base_addr: usize,
-        frame_size_unit: usize,
-    ) -> BuddyManager {
+    fn new(nodes: *mut Node<Frame>, count: usize, base_addr: usize, frame_size_unit: usize) -> Result<BuddyManager, String> {
+        let nodes = Unique::new(nodes).ok_or("The given pointer to the nodes is null".to_string())?;
+
         let lists = unsafe {
             let mut lists: [LinkedList<Frame>; MAX_ORDER] = mem::uninitialized();
 
@@ -43,11 +41,6 @@ impl BuddyManager {
             }
 
             lists
-        };
-
-        let nodes = match Unique::new(nodes) {
-            Some(u) => u,
-            None => panic!("The node pointer is null !"),
         };
 
         let mut bman = BuddyManager {
@@ -61,17 +54,17 @@ impl BuddyManager {
 
         bman.supply_frame_nodes(nodes, count);
 
-        bman
+        Ok(bman)
     }
 
     fn push_node_frame(&mut self, order: usize, node_ptr: Unique<Node<Frame>>) {
-        self.lists[order].push_back(node_ptr);
+        self.lists[order].push_tail(node_ptr);
         self.count_free_frames[order] += 1;
     }
 
     fn pop_node_frame(&mut self, order: usize) -> Option<Unique<Node<Frame>>> {
         self.count_free_frames[order] -= 1;
-        self.lists[order].pop_front()
+        self.lists[order].pop_head()
     }
 
     fn is_empty_list(&self, order: usize) -> bool {
@@ -217,7 +210,7 @@ mod tests {
         let count = 1024;
         let nodes = allocate_node_objs::<Node<Frame>>(count);
 
-        let bman = BuddyManager::new(&mut nodes[0] as *mut _, count, 0, FRAME_SIZE);
+        let bman = BuddyManager::new(&mut nodes[0] as *mut _, count, 0, FRAME_SIZE).unwrap();
         expected_counts[10] += 1;
         assert_eq!(bman.count_free_frames, expected_counts);
     }
@@ -226,7 +219,7 @@ mod tests {
     fn test_get_frame_index() {
         let count = 1024;
         let nodes = allocate_node_objs::<Node<Frame>>(count);
-        let bman = BuddyManager::new(&mut nodes[0] as *mut _, count, 0, FRAME_SIZE);
+        let bman = BuddyManager::new(&mut nodes[0] as *mut _, count, 0, FRAME_SIZE).unwrap();
 
         assert_eq!(
             bman.get_frame_index(unsafe { Unique::new_unchecked(&mut nodes[0] as *mut _) }),
@@ -246,14 +239,14 @@ mod tests {
     fn test_get_buddy_node() {
         let count = 1024;
         let nodes = allocate_node_objs::<Node<Frame>>(count);
-        let _bman = BuddyManager::new(&mut nodes[0] as *mut _, count, 0, FRAME_SIZE);
+        let _bman = BuddyManager::new(&mut nodes[0] as *mut _, count, 0, FRAME_SIZE).unwrap();
     }
 
     #[test]
     fn test_allocate_frame_by_order_and_free() {
         let count = 1024;
         let nodes = allocate_node_objs::<Node<Frame>>(count);
-        let mut bman = BuddyManager::new(&mut nodes[0] as *mut _, count, 0, FRAME_SIZE);
+        let mut bman = BuddyManager::new(&mut nodes[0] as *mut _, count, 0, FRAME_SIZE).unwrap();
 
         assert_eq!(bman.count_free_frames(), 1024);
 
@@ -276,7 +269,7 @@ mod tests {
 
         let count = 512;
         let nodes = allocate_node_objs::<Node<Frame>>(count);
-        let mut bman = BuddyManager::new(&mut nodes[0] as *mut _, count, 0, FRAME_SIZE);
+        let mut bman = BuddyManager::new(&mut nodes[0] as *mut _, count, 0, FRAME_SIZE).unwrap();
         let node1 = bman.allocate_frame_by_order(1).unwrap();
         assert_eq!(bman.count_free_frames(), 510);
         assert_eq!(bman.count_used_frames(), 2);
@@ -297,7 +290,7 @@ mod tests {
         let count = 128;
         let nodes = allocate_node_objs::<Node<Frame>>(count);
         let base_addr = 1024;
-        let mut bman = BuddyManager::new(&mut nodes[0] as *mut _, count, base_addr, FRAME_SIZE);
+        let mut bman = BuddyManager::new(&mut nodes[0] as *mut _, count, base_addr, FRAME_SIZE).unwrap();
 
         let node1 = bman.allocate_frame_by_order(0).unwrap();
         let node2 = bman.allocate_frame_by_order(0).unwrap();

@@ -18,8 +18,15 @@ impl<T> Anchor<T> {
             prev: None,
         }
     }
+
+    pub fn init(&mut self) {
+        self.next = None;
+        self.prev = None;
+    }
 }
 
+// The most head node has None prev in `Anchor`.
+// The most tail node has None next in `Anchor`.
 trait Node<T: Node<T>> {
     fn anchor(&self) -> &Anchor<T>;
     fn anchor_mut(&mut self) -> &mut Anchor<T>;
@@ -27,7 +34,32 @@ trait Node<T: Node<T>> {
     fn extract_mut(&mut self) -> &mut T;
 
     fn count(&self) -> usize {
-        0
+        let mut count = 1;
+        let mut anchor;
+
+        // Count the nodes to forward.
+        anchor = self.anchor();
+        loop {
+            if let Some(ref next) = anchor.next {
+                anchor = unsafe { next.as_ref().anchor() };
+                count += 1;
+            } else {
+                break;
+            }
+        }
+
+        // Count the nodes to backward.
+        anchor = self.anchor();
+        loop {
+            if let Some(ref prev) = anchor.prev {
+                anchor = unsafe { prev.as_ref().anchor() };
+                count += 1;
+            } else {
+                break;
+            }
+        }
+
+        count
     }
 }
 
@@ -74,7 +106,21 @@ impl<T: Node<T>> LinkedList<T> {
     }
 
     pub fn push_head(&mut self, node: Unique<T>) {
-        self.head = Some(NonNull::from(node));
+        let mut new_head = NonNull::from(node);
+
+        unsafe { new_head.as_mut().anchor_mut().init() };
+
+        if let Some(old_head) = self.head {
+            unsafe {
+                new_head.as_mut().anchor_mut().next = Some(old_head);
+                // old_head.as_mut().anchor_mut().prev = Some(new_head);
+            }
+        } else {
+            // The list has no node.
+            self.tail = Some(new_head);
+        }
+
+        self.head = Some(new_head)
     }
 
     pub fn pop_head(&mut self) -> Option<Unique<T>> {
@@ -150,9 +196,9 @@ mod tests {
         let nodes = allocate_nodes::<Object>(SIZE);
 
         unsafe {
-        println!("{:?}", nodes.offset(0).as_ref());
-        list1.push_head(Unique::new_unchecked(nodes.offset(0)));
-        list1.push_head(Unique::new_unchecked(nodes.offset(1)));
+            println!("{:?}", nodes.offset(0).as_ref());
+            list1.push_head(Unique::new_unchecked(nodes.offset(0)));
+            list1.push_head(Unique::new_unchecked(nodes.offset(1)));
         }
 
         let cnt = 2;

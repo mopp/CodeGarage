@@ -25,13 +25,20 @@ trait Node<T: Node<T>> {
     fn anchor_mut(&mut self) -> &mut Anchor<T>;
     fn extract(&self) -> &T;
     fn extract_mut(&mut self) -> &mut T;
+
+    fn count(&self) -> usize {
+        0
+    }
 }
 
+/// This LinkedList does not has the length.
+/// It has to be counted by the user of this list.
+/// Sometimes we would like to concatenate node which belongs a list and another node which belongs
+/// another list.
 #[derive(Debug)]
 struct LinkedList<T: Node<T>> {
     head: Option<NonNull<T>>,
     tail: Option<NonNull<T>>,
-    length: usize,
 }
 
 impl<T: Node<T>> LinkedList<T> {
@@ -39,7 +46,6 @@ impl<T: Node<T>> LinkedList<T> {
         LinkedList {
             head: None,
             tail: None,
-            length: 0,
         }
     }
 
@@ -57,6 +63,14 @@ impl<T: Node<T>> LinkedList<T> {
 
     pub fn tail_mut(&mut self) -> Option<&mut T> {
         self.tail.map(|tail| unsafe { &mut *tail.as_ptr() })
+    }
+
+    pub fn count(&self) -> usize {
+        if let Some(ref head) = self.head {
+            unsafe { head.as_ref().count() }
+        } else {
+            0
+        }
     }
 
     pub fn push_head(&mut self, node: Unique<T>) {
@@ -82,6 +96,10 @@ mod tests {
         let ptr = unsafe { System.alloc(layout) }.unwrap();
 
         ptr.as_ptr() as *mut _
+    }
+
+    fn uniqued<T>(nodes: *mut T, index: usize) -> Unique<T> {
+        unsafe { Unique::new_unchecked(nodes.offset(index as isize)) }
     }
 
     #[repr(C)]
@@ -154,7 +172,7 @@ mod tests {
     }
 
     #[test]
-    fn push_head() {
+    fn test_push_head_ones() {
         let mut list1 = LinkedList::<Object>::new();
 
         assert_eq!(false, list1.head().is_some());
@@ -162,7 +180,7 @@ mod tests {
         const SIZE: usize = 8;
         let nodes = allocate_nodes::<Object>(SIZE);
 
-        list1.push_head(unsafe { Unique::new_unchecked(nodes.offset(0)) });
+        list1.push_head(uniqued(nodes, 0));
 
         assert_eq!(true, list1.head().is_some());
         if let Some(head) = list1.head_mut() {
@@ -171,5 +189,21 @@ mod tests {
         } else {
             panic!("error");
         }
+    }
+
+    #[test]
+    fn test_push_head() {
+        let mut list1 = LinkedList::<Object>::new();
+
+        assert_eq!(false, list1.head().is_some());
+
+        const SIZE: usize = 8;
+        let nodes = allocate_nodes::<Object>(SIZE);
+
+        list1.push_head(uniqued(nodes, 0));
+        list1.push_head(uniqued(nodes, 1));
+        list1.push_head(uniqued(nodes, 2));
+
+        assert_eq!(3, list1.count())
     }
 }

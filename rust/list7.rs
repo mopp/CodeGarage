@@ -7,19 +7,20 @@
 #![crate_type = "rlib"]
 #![crate_name = "list7"]
 
-// use core::ptr;
+use core::ptr;
 use core::ptr::{NonNull, Unique};
+use core::marker::PhantomData;
 
+// TODO: divide required methods and the others.
 pub trait Node<T: Node<T>> {
-    fn set_next(&mut self, NonNull<Self>);
-    fn set_prev(&mut self, NonNull<Self>);
+    fn set_next(&mut self, Option<NonNull<Self>>);
+    fn set_prev(&mut self, Option<NonNull<Self>>);
     fn next(&self) -> Option<NonNull<Self>>;
     fn prev(&self) -> Option<NonNull<Self>>;
 
-    fn init_link(&mut self) {
-        let ptr = unsafe { NonNull::new_unchecked(self as *mut _) };
-        self.set_next(ptr);
-        self.set_prev(ptr);
+    fn init(&mut self) {
+        self.set_next(None);
+        self.set_prev(None);
     }
 
     fn count(&self) -> usize {
@@ -51,53 +52,26 @@ pub trait Node<T: Node<T>> {
         count
     }
 
-    // fn detach(&mut self) {
-    //     let prev = self.prev().into();
-    //     let next = self.next().into();
-    //     self.next_mut().set_prev(prev);
-    //     self.prev_mut().set_next(next);
-    //
-    //     self.init_link();
-    // }
-    //
-    // fn find<F>(&mut self, f: F) -> Option<NonNull<T>> where F: Fn(&T) -> bool {
-    //     let tail = self.prev_mut().as_shared();
-    //     let mut current = self.next_mut().prev_mut().as_shared();
-    //
-    //     while ptr::eq(current.as_ptr(), tail.as_ptr()) == false {
-    //         if f(unsafe { current.as_ref() }) {
-    //             return Some(current);
-    //         }
-    //
-    //         unsafe {
-    //             current = current.as_mut().next_mut().as_shared();
-    //         }
-    //     }
-    //
-    //     None
-    // }
-    //
-    // fn insert_next(&mut self, mut new_next: NonNull<T>) {
-    //     {
-    //         let new_next = unsafe { new_next.as_mut() };
-    //         new_next.set_next(self.next().into());
-    //         new_next.set_prev(self.as_shared())
-    //     }
-    //
-    //     self.next_mut().set_prev(new_next);
-    //     self.set_next(new_next);
-    // }
-    //
-    // fn insert_prev(&mut self, mut new_prev: NonNull<T>) {
-    //     {
-    //         let new_prev = unsafe { new_prev.as_mut() };
-    //         new_prev.set_next(self.as_shared());
-    //         new_prev.set_prev(self.prev().into());
-    //     }
-    //
-    //     self.prev_mut().set_next(new_prev);
-    //     self.set_prev(new_prev);
-    // }
+    fn detach(&mut self) {
+        match (self.prev(), self.next()) {
+            (Some(mut prev), Some(mut next)) => {
+                unsafe {
+                    prev.as_mut().set_next(Some(next));
+                    next.as_mut().set_prev(Some(prev));
+                }
+                self.init();
+            },
+            (None, None) => {
+                // It was detached already.
+            },
+            (None, _) => {
+                // Maybe it is head node in list.
+            },
+            (_, None) => {
+                // Maybe it is tail node in list.
+            },
+        }
+    }
 }
 
 pub struct LinkedList<T: Node<T>> {
@@ -129,103 +103,131 @@ impl<T: Node<T>> LinkedList<T> {
         self.tail.map(|tail| unsafe { &mut *tail.as_ptr() })
     }
 
-    pub fn push_head(&self, node: Unique<T>) {
-        unimplemented!("");
+    pub fn count(&self) -> usize {
+        if let Some(ref head) = self.head {
+            unsafe { head.as_ref().count() }
+        } else {
+            0
+        }
     }
 
-    pub fn length(&self) -> usize {
+    pub fn push_head(&mut self, node: Unique<T>) {
+        let mut new_head = NonNull::from(node);
 
-        self.length
+        unsafe { new_head.as_mut().init() };
+
+        if let Some(mut old_head) = self.head {
+            unsafe {
+                new_head.as_mut().set_next(Some(old_head));
+                old_head.as_mut().set_prev(Some(new_head));
+            }
+        } else {
+            // The list has no node.
+            self.tail = Some(new_head);
+        }
+
+        self.head = Some(new_head)
     }
-    
-    // pub fn push(&mut self, new_node: NonNull<T>, is_next: bool) {
-    //     if let Some(mut node) = self.node {
-    //         unsafe {
-    //             if is_next {
-    //                 node.as_mut().insert_next(new_node);
-    //             } else {
-    //                 node.as_mut().insert_prev(new_node);
-    //             }
-    //         }
-    //     } else {
-    //         self.node = Some(new_node);
-    //     }
-    //
-    //     self.length += 1;
-    // }
-    //
-    // pub fn push_head(&mut self, new_node: NonNull<T>) {
-    //     self.push(new_node, true);
-    // }
-    //
-    // pub fn push_tail(&mut self, new_node: NonNull<T>) {
-    //     self.push(new_node, false);
-    // }
-    //
-    // fn pop(&mut self, is_next: bool) -> Option<NonNull<T>> {
-    //     self.node.map(|mut node| {
-    //         if unsafe { node.as_ref().is_alone() } {
-    //             self.node = None;
-    //         } else {
-    //             let node = unsafe { node.as_mut() };
-    //             self.node = Some(
-    //                 match is_next {
-    //                     true => node.next_mut(),
-    //                     false => node.prev_mut(),
-    //                 }.as_shared(),
-    //             );
-    //             node.detach();
-    //         }
-    //
-    //         self.length -= 1;
-    //         if self.length == 0 {
-    //             self.node = None;
-    //         }
-    //
-    //         node
-    //     })
-    // }
-    //
-    // pub fn pop_head(&mut self) -> Option<NonNull<T>> {
-    //     self.pop(true)
-    // }
-    //
-    // pub fn pop_tail(&mut self) -> Option<NonNull<T>> {
-    //     self.pop(false)
-    // }
-    //
-    // fn has_node(&self, target_node: NonNull<T>) -> bool {
-    //     match self.node {
-    //         None => false,
-    //         Some(node) if self.length == 1 => {
-    //             ptr::eq(node.as_ptr(), target_node.as_ptr())
-    //         },
-    //         Some(mut node) => {
-    //             let node = unsafe { node.as_mut() };
-    //             let tail = node.prev_mut().as_shared();
-    //             let mut current = node.next_mut().prev_mut().as_shared();
-    //
-    //             while ptr::eq(current.as_ptr(), tail.as_ptr()) == false {
-    //                 if ptr::eq(current.as_ptr(), target_node.as_ptr()) {
-    //                     return true;
-    //                 }
-    //             }
-    //
-    //             false
-    //         }
-    //     }
-    // }
-    //
-    // pub fn detach_node(&mut self, mut node: NonNull<T>) {
-    //     debug_assert!(self.has_node(node), "this node does not belong this list");
-    //
-    //     unsafe { node.as_mut().detach() };
-    //     self.length -= 1;
-    //
-    //     if self.length == 0 {
-    //         self.node = None;
-    //     }
-    // }
+
+    pub fn pop_head(&mut self) -> Option<Unique<T>> {
+        if let Some(mut head) = self.head {
+            if let Some(mut next) = unsafe { head.as_mut().next() } {
+                unsafe { next.as_mut().set_prev(None) };
+                self.head = Some(next);
+            } else {
+                // This list has one node only.
+                self.head = None;
+                self.tail = None;
+            }
+
+            Some(Unique::from(head))
+        } else {
+            None
+        }
+    }
+
+    pub fn pop_tail(&mut self) -> Option<Unique<T>> {
+        if let Some(mut tail) = self.tail {
+            if let Some(mut prev) = unsafe { tail.as_mut().prev() } {
+                unsafe { prev.as_mut().set_next(None) };
+                self.tail = Some(prev);
+            } else {
+                // This list has one node only.
+                self.head = None;
+                self.tail = None;
+            }
+
+            Some(Unique::from(tail))
+        } else {
+            None
+        }
+    }
+
+    fn has_node(&self, target: NonNull<T>) -> bool {
+        self.iter().any(|obj| ptr::eq(obj as *const _, target.as_ptr()))
+    }
+
+    pub fn detach(&mut self, mut target: NonNull<T>) {
+        debug_assert!(self.has_node(target), "this node does not belong this list");
+
+        if let Some(head) = self.head {
+            if ptr::eq(head.as_ptr(), target.as_ptr()) {
+                // The target is the head.
+                self.pop_head();
+                unsafe { target.as_mut().init() };
+            } else {
+                if let Some(tail) = self.tail {
+                    if ptr::eq(tail.as_ptr(), target.as_ptr()) {
+                        // The target is the head.
+                        self.pop_tail();
+                        unsafe { target.as_mut().init() };
+                    }
+                } else {
+                    unsafe { target.as_mut().detach(); }
+                }
+            }
+        }
+    }
+
+    pub fn iter(&self) -> Iter<T> {
+        Iter(self.head())
+    }
+
+    pub fn iter_mut(&mut self) -> IterMut<T> {
+        IterMut(self.head, PhantomData)
+    }
+}
+
+pub struct Iter<'a, T: 'a + Node<T>>(Option<&'a T>);
+
+impl<'a, T: Node<T>> Iterator for Iter<'a, T> {
+    type Item = &'a T;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if let Some(current) = self.0 {
+            self.0 = current.next().map(|ptr| unsafe { &*ptr.as_ptr() });
+            Some(current)
+        } else {
+            None
+        }
+    }
+}
+
+pub struct IterMut<'a, T: 'a + Node<T>>(Option<NonNull<T>>, PhantomData<&'a T>);
+
+impl<'a, T: Node<T>> Iterator for IterMut<'a, T> {
+    type Item = &'a mut T;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if let Some(mut ptr) = self.0 {
+            unsafe {
+                self.0 = ptr.as_mut().next();
+                Some(&mut *ptr.as_ptr())
+            }
+        } else {
+            None
+        }
+    }
 }
 
 
@@ -250,12 +252,12 @@ mod tests {
 
     // TODO: use macro or custom derive.
     impl Node<Object> for Object {
-        fn set_next(&mut self, ptr: NonNull<Self>) {
-            self.next = Some(ptr);
+        fn set_next(&mut self, ptr: Option<NonNull<Self>>) {
+            self.next = ptr;
         }
 
-        fn set_prev(&mut self, ptr: NonNull<Self>) {
-            self.prev = Some(ptr);
+        fn set_prev(&mut self, ptr: Option<NonNull<Self>>) {
+            self.prev = ptr;
         }
 
         fn next(&self) -> Option<NonNull<Self>> {
@@ -281,7 +283,7 @@ mod tests {
     }
 
     #[test]
-    fn test_push_head_ones() {
+    fn test_push_head() {
         let mut list1 = LinkedList::<Object>::new();
 
         assert_eq!(false, list1.head().is_some());
@@ -298,5 +300,105 @@ mod tests {
         } else {
             panic!("error");
         }
+    }
+
+    #[test]
+    fn test_push_heads() {
+        let mut list1 = LinkedList::<Object>::new();
+
+        assert_eq!(false, list1.head().is_some());
+
+        const SIZE: usize = 8;
+        let nodes = allocate_nodes::<Object>(SIZE);
+
+        list1.push_head(uniqued(nodes, 0));
+        list1.push_head(uniqued(nodes, 1));
+        list1.push_head(uniqued(nodes, 2));
+
+        assert_eq!(3, list1.count());
+    }
+
+    #[test]
+    fn test_pop_heads() {
+        let mut list1 = LinkedList::<Object>::new();
+
+        const SIZE: usize = 8;
+        let nodes = allocate_nodes::<Object>(SIZE);
+
+        list1.push_head(uniqued(nodes, 0));
+        list1.head_mut().unwrap().hoge = 0;
+        list1.push_head(uniqued(nodes, 1));
+        list1.head_mut().unwrap().hoge = 1;
+        list1.push_head(uniqued(nodes, 2));
+        list1.head_mut().unwrap().hoge = 2;
+
+        assert_eq!(3, list1.count());
+
+        for i in (0..3).rev() {
+            if let Some(n) = list1.pop_head() {
+                assert_eq!(i, unsafe { n.as_ref().hoge })
+            } else {
+                panic!("error")
+            }
+        }
+
+        assert_eq!(0, list1.count());
+    }
+
+    #[test]
+    fn test_detach() {
+        let mut list1 = LinkedList::<Object>::new();
+
+        const SIZE: usize = 8;
+        let nodes = allocate_nodes::<Object>(SIZE);
+
+        for i in 0..SIZE {
+            list1.push_head(uniqued(nodes, i));
+            list1.head_mut().unwrap().hoge = i;
+        }
+        assert_eq!(SIZE, list1.count());
+
+        // Detach the head.
+        let target1 = unsafe { NonNull::new_unchecked(nodes.offset((SIZE - 1) as isize)) };
+        list1.detach(target1);
+        assert_eq!(SIZE - 1, list1.count());
+
+        // Detach the tail.
+        let target1 = unsafe { NonNull::new_unchecked(nodes.offset(0)) };
+        list1.detach(target1);
+        assert_eq!(SIZE - 2, list1.count());
+
+        // Detach the tail.
+        let target1 = unsafe { NonNull::new_unchecked(nodes.offset((SIZE / 2) as isize)) };
+        list1.detach(target1);
+        assert_eq!(SIZE - 2, list1.count());
+    }
+
+    #[test]
+    fn test_iterator() {
+        let mut list1 = LinkedList::<Object>::new();
+
+        const SIZE: usize = 8;
+        let nodes = allocate_nodes::<Object>(SIZE);
+
+        for i in 0..SIZE {
+            list1.push_head(uniqued(nodes, i));
+            list1.head_mut().unwrap().hoge = i;
+        }
+        assert_eq!(SIZE, list1.count());
+
+        let mut cnt = SIZE;
+        for ptr in list1.iter_mut() {
+            cnt -= 1;
+            assert_eq!(cnt, ptr.hoge);
+            ptr.hoge *= 2;
+        }
+
+        let mut cnt = SIZE;
+        for ptr in list1.iter() {
+            cnt -= 1;
+            assert_eq!(cnt * 2, ptr.hoge);
+        }
+        assert_eq!(SIZE, list1.count());
     }
 }

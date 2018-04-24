@@ -11,7 +11,6 @@ use core::ptr;
 use core::ptr::{NonNull, Unique};
 use core::marker::PhantomData;
 
-// TODO: divide required methods and the others.
 pub trait Node<T: Node<T>> {
     fn set_next(&mut self, Option<NonNull<Self>>);
     fn set_prev(&mut self, Option<NonNull<Self>>);
@@ -112,6 +111,7 @@ impl<T: Node<T>> LinkedList<T> {
     }
 
     pub fn push_head(&mut self, node: Unique<T>) {
+        debug_assert!(self.has_node(node.into()) == false, "this node was pushed already");
         let mut new_head = NonNull::from(node);
 
         unsafe { new_head.as_mut().init() };
@@ -127,6 +127,25 @@ impl<T: Node<T>> LinkedList<T> {
         }
 
         self.head = Some(new_head)
+    }
+
+    pub fn push_tail(&mut self, node: Unique<T>) {
+        debug_assert!(self.has_node(node.into()) == false, "this node was pushed already");
+        let mut new_tail = NonNull::from(node);
+
+        unsafe { new_tail.as_mut().init() };
+
+        if let Some(mut old_tail) = self.tail {
+            unsafe {
+                new_tail.as_mut().set_prev(Some(old_tail));
+                old_tail.as_mut().set_next(Some(new_tail));
+            }
+        } else {
+            // The list has no node.
+            self.head = Some(new_tail);
+        }
+
+        self.tail = Some(new_tail)
     }
 
     pub fn pop_head(&mut self) -> Option<Unique<T>> {
@@ -319,6 +338,40 @@ mod tests {
     }
 
     #[test]
+    fn test_push_tails() {
+        let mut list1 = LinkedList::<Object>::new();
+
+        assert_eq!(0, list1.count());
+
+        const SIZE: usize = 8;
+        let nodes = allocate_nodes::<Object>(SIZE);
+
+        for i in 0..SIZE {
+            list1.push_tail(uniqued(nodes, i));
+        }
+        assert_eq!(SIZE, list1.count());
+    }
+
+    #[test]
+    fn test_mix_push() {
+        let mut list1 = LinkedList::<Object>::new();
+
+        assert_eq!(0, list1.count());
+
+        const SIZE: usize = 8;
+        let nodes = allocate_nodes::<Object>(SIZE);
+
+        for i in 0..SIZE {
+            if i % 2 == 0 {
+                list1.push_head(uniqued(nodes, i));
+            } else {
+                list1.push_tail(uniqued(nodes, i));
+            }
+        }
+        assert_eq!(SIZE, list1.count());
+    }
+
+    #[test]
     fn test_pop_heads() {
         let mut list1 = LinkedList::<Object>::new();
 
@@ -336,6 +389,33 @@ mod tests {
 
         for i in (0..3).rev() {
             if let Some(n) = list1.pop_head() {
+                assert_eq!(i, unsafe { n.as_ref().hoge })
+            } else {
+                panic!("error")
+            }
+        }
+
+        assert_eq!(0, list1.count());
+    }
+
+    #[test]
+    fn test_pop_tails() {
+        let mut list1 = LinkedList::<Object>::new();
+
+        const SIZE: usize = 8;
+        let nodes = allocate_nodes::<Object>(SIZE);
+
+        list1.push_head(uniqued(nodes, 0));
+        list1.head_mut().unwrap().hoge = 0;
+        list1.push_head(uniqued(nodes, 1));
+        list1.head_mut().unwrap().hoge = 1;
+        list1.push_head(uniqued(nodes, 2));
+        list1.head_mut().unwrap().hoge = 2;
+
+        assert_eq!(3, list1.count());
+
+        for i in 0..3 {
+            if let Some(n) = list1.pop_tail() {
                 assert_eq!(i, unsafe { n.as_ref().hoge })
             } else {
                 panic!("error")

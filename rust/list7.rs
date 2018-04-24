@@ -264,7 +264,8 @@ mod tests {
     struct Object {
         next: Option<NonNull<Object>>,
         prev: Option<NonNull<Object>>,
-        order: usize,
+        order: u8,
+        is_used: bool,
         hoge: usize,
         huga: usize,
     }
@@ -506,5 +507,73 @@ mod tests {
         }
         assert_eq!(0, list1.count());
         assert_eq!(SIZE, list2.count());
+    }
+
+    const MAX_ORDER: usize = 15;
+
+    trait BuddyObject {
+        fn mark_used(&mut self);
+        fn mark_free(&mut self);
+        fn is_used(&self) -> bool;
+        fn order(&self) -> u8;
+        fn set_order(&mut self, order: u8);
+    }
+
+    impl BuddyObject for Object {
+        fn mark_used(&mut self) {
+            self.is_used = true;
+        }
+
+        fn mark_free(&mut self) {
+            self.is_used = false;
+        }
+
+        fn is_used(&self) -> bool {
+            self.is_used
+        }
+
+        fn order(&self) -> u8 {
+            self.order
+        }
+
+        fn set_order(&mut self, order: u8) {
+            self.order = order;
+        }
+    }
+
+    struct BuddyManager<T: BuddyObject + Node<T>> {
+        obj_ptr: Unique<BuddyObject>,
+        obj_count: usize,
+        free_lists: [LinkedList<T>; MAX_ORDER],
+    }
+
+    impl<T: BuddyObject + Node<T>> BuddyManager<T> {
+        pub fn new(obj_ptr: Unique<BuddyObject>, count: usize) -> BuddyManager<T> {
+            let mut free_lists = unsafe {
+                let mut lists: [LinkedList<T>; MAX_ORDER] = mem::uninitialized();
+
+                for l in lists.iter_mut() {
+                    ptr::write(l, LinkedList::new())
+                }
+
+                lists
+            };
+
+            BuddyManager {
+                obj_ptr: obj_ptr,
+                obj_count: count,
+                free_lists: free_lists
+            }
+        }
+
+        // fn insert_objs()
+
+        fn allocate(&mut self) -> Unique<T> {
+            unimplemented!("")
+        }
+    }
+
+    #[test]
+    fn test_buddy_manager_allocate() {
     }
 }

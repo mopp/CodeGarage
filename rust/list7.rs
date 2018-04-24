@@ -401,4 +401,30 @@ mod tests {
         }
         assert_eq!(SIZE, list1.count());
     }
+
+    #[test]
+    fn test_move_nodes() {
+        let mut list1 = LinkedList::<Object>::new();
+        let mut list2 = LinkedList::<Object>::new();
+
+        const SIZE: usize = 32;
+        let nodes = allocate_nodes::<Object>(SIZE);
+
+        for i in 0..SIZE {
+            list1.push_head(uniqued(nodes, i));
+            list1.head_mut().unwrap().hoge = i;
+        }
+
+        assert_eq!(SIZE, list1.count());
+        assert_eq!(0, list2.count());
+        loop {
+            if let Some(node) = list1.pop_head() {
+                list2.push_head(node.into());
+            } else {
+                break;
+            }
+        }
+        assert_eq!(0, list1.count());
+        assert_eq!(SIZE, list2.count());
+    }
 }

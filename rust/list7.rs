@@ -264,7 +264,7 @@ mod tests {
     struct Object {
         next: Option<NonNull<Object>>,
         prev: Option<NonNull<Object>>,
-        order: u8,
+        order: usize,
         is_used: bool,
         hoge: usize,
         huga: usize,
@@ -515,9 +515,14 @@ mod tests {
         fn mark_used(&mut self);
         fn mark_free(&mut self);
         fn is_used(&self) -> bool;
-        fn order(&self) -> u8;
-        fn set_order(&mut self, order: u8);
+        fn order(&self) -> usize;
+        fn set_order(&mut self, order: usize);
     }
+
+    // struct BuddyObject {
+    //     order: usize,
+    //     is_used: bool,
+    // }
 
     impl BuddyObject for Object {
         fn mark_used(&mut self) {
@@ -532,23 +537,24 @@ mod tests {
             self.is_used
         }
 
-        fn order(&self) -> u8 {
+        fn order(&self) -> usize {
             self.order
         }
 
-        fn set_order(&mut self, order: u8) {
+        fn set_order(&mut self, order: usize) {
             self.order = order;
         }
     }
 
-    struct BuddyManager<T: BuddyObject + Node<T>> {
-        obj_ptr: Unique<BuddyObject>,
+    struct BuddyAllocator<T: BuddyObject + Node<T>> {
+        obj_ptr: Unique<T>,
         obj_count: usize,
         free_lists: [LinkedList<T>; MAX_ORDER],
+        free_counts: [usize; MAX_ORDER],
     }
 
-    impl<T: BuddyObject + Node<T>> BuddyManager<T> {
-        pub fn new(obj_ptr: Unique<BuddyObject>, count: usize) -> BuddyManager<T> {
+    impl<T: BuddyObject + Node<T>> BuddyAllocator<T> {
+        pub fn new(obj_ptr: Unique<T>, count: usize) -> BuddyAllocator<T> {
             let mut free_lists = unsafe {
                 let mut lists: [LinkedList<T>; MAX_ORDER] = mem::uninitialized();
 
@@ -559,21 +565,70 @@ mod tests {
                 lists
             };
 
-            BuddyManager {
+            let mut free_counts = [0; MAX_ORDER];
+
+            let mut index = 0;
+            for order in (0..MAX_ORDER).rev() {
+                let count_in_order = 1 << order;
+                loop {
+                    if (count - index) < count_in_order {
+                        break;
+                    }
+
+                    let target_obj = unsafe {
+                        let mut obj = Unique::new_unchecked(obj_ptr.as_ptr().offset(index as isize));
+                        obj.as_mut().set_order(order);
+                        obj.as_mut().mark_free();
+                        obj
+                    };
+                    free_lists[order].push_tail(target_obj);
+                    free_counts[order] += 1;
+
+                    index += count_in_order;
+                }
+            }
+
+            BuddyAllocator {
                 obj_ptr: obj_ptr,
                 obj_count: count,
-                free_lists: free_lists
+                free_lists: free_lists,
+                free_counts: free_counts,
             }
         }
 
-        // fn insert_objs()
-
-        fn allocate(&mut self) -> Unique<T> {
+        fn allocate(&mut self, order: usize) -> Option<Unique<T>> {
             unimplemented!("")
+        }
+
+        fn free(&mut self, obj: Unique<T>) {
+            unimplemented!("")
+        }
+
+        fn count_free_objs(&self) -> usize {
+            self.free_counts
+                .iter()
+                .enumerate()
+                .fold(0, |acc, (order, count)| acc + count * (1 << order))
         }
     }
 
     #[test]
     fn test_buddy_manager_allocate() {
+        const SIZE: usize = 32;
+        let nodes = allocate_nodes::<Object>(SIZE);
+        let nodes = unsafe { Unique::new_unchecked(nodes) };
+
+        let mut allocator: BuddyAllocator<Object> = BuddyAllocator::new(nodes, SIZE);
+        assert_eq!(SIZE, allocator.count_free_objs());
+        assert_eq!(SIZE, allocator.count_free_objs());
+
+        if let Some(obj) = allocator.allocate(2) {
+            assert_eq!(2, unsafe {obj.as_ref().order()});
+
+            assert_eq!(SIZE - 4, allocator.count_free_objs());
+
+            allocator.free(obj);
+            assert_eq!(SIZE, allocator.count_free_objs());
+        }
     }
 }

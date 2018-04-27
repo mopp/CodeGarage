@@ -1,6 +1,8 @@
 #![cfg_attr(test, feature(allocator_api))]
 #![feature(offset_to)]
-#![feature(shared)]
+#![feature(ptr_internals)]
+#![feature(unique)]
+#![no_std]
 
 extern crate list7;
 
@@ -8,14 +10,27 @@ use std::mem;
 use std::ptr::Shared;
 use std::ptr;
 
-use list7::List;
+use list7::LinkedList;
 use list7::Node;
 
-struct Frame {
-    next: Shared<Frame>,
-    prev: Shared<Frame>,
+enum State {
+    USED,
+    FREE
+}
+
+struct BuddyObject {
     order: usize,
-    is_alloc: bool,
+    state: State,
+}
+
+impl BuddyObject {
+}
+
+#[derive(Debug)]
+struct Frame {
+    next: Option<NonNull<Object>>,
+    prev: Option<NonNull<Object>>,
+    hoge:
 }
 
 

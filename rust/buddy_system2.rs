@@ -86,8 +86,12 @@ impl<T: BuddyObject> BuddyAllocator<T> {
         (head_addr <= addr) && (addr <= tail_addr)
     }
 
-    fn buddy(&mut self, obj: Unique<T>, order: usize) ->  Option<NonNull<T>> {
+    fn buddy(&self, obj: Unique<T>, order: usize) ->  Option<NonNull<T>> {
         debug_assert!(self.is_managed_obj(obj.as_ptr()), "The given object is out of range");
+
+        if MAX_ORDER <= order {
+            return None;
+        }
 
         let index = obj.as_ptr().wrapping_offset_from(self.obj_ptr.as_ptr());
         if (index < 0) || ((self.obj_count as isize) < index) {
@@ -289,7 +293,6 @@ mod tests {
         }
     }
 
-
     #[test]
     fn test_try_to_allocate_all() {
         const SIZE: usize = 32;
@@ -309,6 +312,7 @@ mod tests {
             }
         }
 
+        assert_eq!(true, allocator.allocate(0).is_none());
         assert_eq!(0, allocator.count_free_objs());
         assert_eq!(SIZE, list.count());
 
@@ -323,5 +327,54 @@ mod tests {
 
         assert_eq!(SIZE, allocator.count_free_objs());
         assert_eq!(0, list.count());
+    }
+
+    #[test]
+    fn test_is_managed_obj() {
+        const SIZE: usize = 32;
+        let nodes = allocate_nodes(SIZE);
+        let nodes_unique = unsafe { Unique::new_unchecked(nodes) };
+        let allocator: BuddyAllocator<Frame> = BuddyAllocator::new(nodes_unique, SIZE);
+
+        unsafe {
+            // The first node.
+            assert_eq!(true, allocator.is_managed_obj(nodes));
+            // The last node.
+            assert_eq!(true, allocator.is_managed_obj(nodes.offset((SIZE - 1) as isize)));
+            // Invalid nodes.
+            assert_eq!(false, allocator.is_managed_obj(nodes.offset(-1)));
+            assert_eq!(false, allocator.is_managed_obj(nodes.offset(SIZE as isize)));
+        }
+    }
+
+    #[test]
+    fn test_buddy() {
+        const SIZE: usize = 1 << MAX_ORDER;
+        let nodes = allocate_nodes(SIZE);
+        let nodes_unique = unsafe { Unique::new_unchecked(nodes) };
+        let allocator: BuddyAllocator<Frame> = BuddyAllocator::new(nodes_unique, SIZE);
+
+        let compare_buddy = |expected_buddy_ptr: *mut Frame, (node, order): (Unique<Frame>, usize)| -> bool {
+            if let Some(buddy) = allocator.buddy(node, order) {
+                ptr::eq(expected_buddy_ptr, buddy.as_ptr())
+            } else {
+                false
+            }
+        };
+
+        unsafe {
+            let n0 = nodes_unique;
+            for i in 0..MAX_ORDER {
+                assert_eq!(true, compare_buddy(nodes.offset(1 << i), (n0, i)));
+            }
+            assert_eq!(false, compare_buddy(nodes.offset(0), (n0, MAX_ORDER)));
+
+            let n1 = Unique::new_unchecked(nodes.offset(1));
+            assert_eq!(true, compare_buddy(nodes.offset(0), (n1, 0)));
+            for i in 1..MAX_ORDER {
+                assert_eq!(true, compare_buddy(nodes.offset((1 << i) + 1), (n1, i)));
+            }
+            assert_eq!(false, compare_buddy(nodes.offset(0), (n1, MAX_ORDER)));
+        }
     }
 }

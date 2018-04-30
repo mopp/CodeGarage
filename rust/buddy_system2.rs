@@ -1,4 +1,5 @@
 #![cfg_attr(test, feature(allocator_api))]
+#![feature(ptr_wrapping_offset_from)]
 #![feature(offset_to)]
 #![feature(ptr_internals)]
 #![feature(unique)]
@@ -6,194 +7,148 @@
 
 extern crate list7;
 
-use std::mem;
-use std::ptr::Shared;
-use std::ptr;
+use core::mem;
+use core::ptr;
+use core::ptr::{NonNull, Unique};
 
 use list7::LinkedList;
 use list7::Node;
 
-enum State {
-    USED,
-    FREE
-}
+trait BuddyObject: Sized + Node<Self> {
+    fn mark_used(&mut self);
+    fn mark_free(&mut self);
+    fn is_used(&self) -> bool;
+    fn order(&self) -> usize;
+    fn set_order(&mut self, order: usize);
 
-struct BuddyObject {
-    order: usize,
-    state: State,
-}
-
-impl BuddyObject {
-}
-
-#[derive(Debug)]
-struct Frame {
-    next: Option<NonNull<Object>>,
-    prev: Option<NonNull<Object>>,
-    hoge:
-}
-
-
-struct DummyFrame {
-    index: usize
-}
-
-impl Node<Frame> for Frame {
-    fn as_ptr(&mut self) -> *mut Frame {
-        self as *mut _
-    }
-
-    fn set_next(&mut self, s: Shared<Frame>) {
-        self.next = s;
-    }
-
-    fn set_prev(&mut self, s: Shared<Frame>) {
-        self.prev = s;
-    }
-
-    fn next(&self) -> &Frame {
-        unsafe { self.next.as_ref() }
-    }
-
-    fn next_mut(&mut self) -> &mut Frame {
-        unsafe { self.next.as_mut() }
-    }
-
-    fn prev(&self) -> &Frame {
-        unsafe { self.prev.as_ref() }
-    }
-
-    fn prev_mut(&mut self) -> &mut Frame {
-        unsafe { self.prev.as_mut() }
+    fn size(&self) -> usize {
+        1 << self.order()
     }
 }
 
 const MAX_ORDER: usize = 15;
 
-struct BuddyManager {
-    frame_ptr: *mut Frame,
-    frame_count: usize,
-    frame_lists: [List<Frame>; MAX_ORDER],
+struct BuddyAllocator<T> where T: BuddyObject {
+    obj_ptr: Unique<T>,
+    obj_count: usize,
+    free_lists: [LinkedList<T>; MAX_ORDER],
+    free_counts: [usize; MAX_ORDER],
 }
 
-impl BuddyManager {
-    pub fn new(frames: *mut Frame, frame_count: usize) -> BuddyManager {
-        let mut frame_lists = unsafe {
-            let mut lists: [List<Frame>; MAX_ORDER] = mem::uninitialized();
+impl<T: BuddyObject> BuddyAllocator<T> {
+    pub fn new(obj_ptr: Unique<T>, count: usize) -> BuddyAllocator<T> {
+        let mut free_lists = unsafe {
+            let mut lists: [LinkedList<T>; MAX_ORDER] = mem::uninitialized();
 
             for l in lists.iter_mut() {
-                ptr::write(l, List::new())
+                ptr::write(l, LinkedList::new())
             }
 
             lists
         };
 
-        // Init all frames.
-        for i in 0..frame_count {
-            let f = unsafe { &mut *frames.offset(i as isize) as &mut Frame };
-            f.init_link();
-        }
+        let mut free_counts = [0; MAX_ORDER];
 
-        let mut index = 0usize;
+        let mut index = 0;
         for order in (0..MAX_ORDER).rev() {
-            let frame_count_in_order = 1 << order;
+            let count_in_order = 1 << order;
             loop {
-                if (frame_count - index) < frame_count_in_order {
+                if (count - index) < count_in_order {
                     break;
                 }
 
-                let target_frame = unsafe {
-                    let ptr = frames.offset(index as isize);
-                    let mut frame = Shared::new_unchecked(ptr);
-                    frame.as_mut().order = order;
-                    frame.as_mut().is_alloc = false;
-                    frame
+                let target_obj = unsafe {
+                    let mut obj = Unique::new_unchecked(obj_ptr.as_ptr().offset(index as isize));
+                    obj.as_mut().set_order(order);
+                    obj.as_mut().mark_free();
+                    obj
                 };
-                frame_lists[order].push_tail(target_frame);
+                free_lists[order].push_tail(target_obj);
+                free_counts[order] += 1;
 
-                index += frame_count_in_order;
+                index += count_in_order;
             }
         }
 
-        BuddyManager {
-            frame_ptr: frames,
-            frame_count: frame_count,
-            frame_lists: frame_lists,
+        BuddyAllocator {
+            obj_ptr: obj_ptr,
+            obj_count: count,
+            free_lists: free_lists,
+            free_counts: free_counts,
         }
     }
 
-    fn get_frame_index(&self, frame: Shared<Frame>) -> usize {
-        match self.frame_ptr.offset_to(frame.as_ptr()) {
-            Some(i) => i as usize,
-            None => panic!("?"),
-        }
+    fn is_managed_obj(&self, ptr: *const T) -> bool {
+        let head_addr = self.obj_ptr.as_ptr() as usize;
+        let tail_addr = unsafe { self.obj_ptr.as_ptr().offset((self.obj_count - 1) as isize) as usize };
+
+        let addr = ptr as usize;
+        (head_addr <= addr) && (addr <= tail_addr)
     }
 
-    fn get_buddy_frame(&self, frame: Shared<Frame>, order: usize) -> Option<Shared<Frame>> {
-        let frame_addr = frame.as_ptr() as usize;
-        let head_addr = self.frame_ptr as usize;
-        let tail_addr = unsafe { self.frame_ptr.offset((self.frame_count - 1) as isize) as usize };
+    fn buddy(&mut self, obj: Unique<T>, order: usize) ->  Option<NonNull<T>> {
+        debug_assert!(self.is_managed_obj(obj.as_ptr()), "The given object is out of range");
 
-        debug_assert!(head_addr <= frame_addr, "Invalid frame is given");
-        debug_assert!(frame_addr <= tail_addr, "Invalid frame is given");
-
-        let is_in_valid_range = |addr: usize| (head_addr <= addr) && (addr <= tail_addr);
-
-        if is_in_valid_range(frame_addr) == false {
-            return None;
-        }
-
-        let buddy_index = self.get_frame_index(frame) ^ (1 << order);
-        let buddy_addr = unsafe { self.frame_ptr.offset(buddy_index as isize) };
-
-        if is_in_valid_range(buddy_addr as usize) == false {
+        let index = obj.as_ptr().wrapping_offset_from(self.obj_ptr.as_ptr());
+        if (index < 0) || ((self.obj_count as isize) < index) {
             None
         } else {
-            Some(unsafe { Shared::new_unchecked(buddy_addr) })
+            let buddy_index = index ^ (1 << (order as isize));
+            let buddy_obj = unsafe {
+                let addr = self.obj_ptr.as_ptr().offset(buddy_index as isize);
+                NonNull::new_unchecked(addr)
+            };
+
+            if self.is_managed_obj(buddy_obj.as_ptr()) {
+                Some(buddy_obj)
+            } else {
+                None
+            }
         }
     }
 
-    pub fn alloc(&mut self, request_order: usize) -> Option<DummyFrame> {
+    pub fn allocate(&mut self, request_order: usize) -> Option<Unique<T>> {
         if MAX_ORDER <= request_order {
             return None;
         }
 
-        // find last set instruction makes it more accelerate ?
+        // Find last set instruction makes it more accelerate ?
         // 0001 1000
         // fls(map >> request_order) ?
         for order in request_order..MAX_ORDER {
-            match self.frame_lists[order].pop_head() {
+            match self.free_lists[order].pop_head() {
                 None => {
-                    continue;
-                }
-                Some(mut frame) if request_order < order => {
+                    continue
+                },
+                Some(mut obj) => {
                     unsafe {
-                        frame.as_mut().order = request_order;
-                        frame.as_mut().is_alloc = true;
+                        let obj = obj.as_mut();
+                        obj.set_order(request_order);
+                        obj.mark_used();
                     };
 
-                    // Push extra frames.
+                    self.free_counts[order] -= 1;
+
+                    // Push the extra frames.
                     for i in request_order..order {
-                        match self.get_buddy_frame(frame, i) {
-                            Some(mut buddy_frame) => {
+                        match self.buddy(obj, i) {
+                            Some(mut buddy_obj) => {
                                 unsafe {
-                                    buddy_frame.as_mut().order = i;
-                                    buddy_frame.as_mut().is_alloc = false;
+                                    let buddy_obj = buddy_obj.as_mut();
+                                    buddy_obj.set_order(i);
+                                    buddy_obj.mark_free();
                                 }
-                                self.frame_lists[i].push_tail(buddy_frame);
+                                let buddy_obj = Unique::from(buddy_obj);
+                                self.free_lists[i].push_tail(buddy_obj);
+                                self.free_counts[i] += 1;
+                            },
+                            None => {
+                                break;
                             }
-                            None => unreachable!("why"),
                         }
                     }
 
-                    return Some(DummyFrame {index: self.get_frame_index(frame)});
-                }
-                Some(mut frame) => {
-                    unsafe {
-                        frame.as_mut().order = request_order;
-                        frame.as_mut().is_alloc = true;
-                    };
-                    return Some(DummyFrame {index: self.get_frame_index(frame)});
+                    return Some(obj);
                 }
             }
         }
@@ -201,108 +156,172 @@ impl BuddyManager {
         None
     }
 
-    pub fn free(&mut self, frame: DummyFrame) {
-        debug_assert!(frame.index < self.frame_count);
+    pub fn free(&mut self, mut obj: Unique<T>) {
+        debug_assert!(self.is_managed_obj(obj.as_ptr()), "The given object is out of range");
 
-        let frame = unsafe {
-            let ptr = self.frame_ptr.offset(frame.index as isize);
-            Shared::new_unchecked(ptr)
+        let order = unsafe {
+            obj.as_mut().mark_free();
+            obj.as_ref().order()
         };
-        let order = unsafe { frame.as_ref().order };
 
-        let mut merged_frame = frame;
-        for order in order..MAX_ORDER {
-            match self.get_buddy_frame(merged_frame, order) {
-                Some(mut buddy_frame) => {
-                    if unsafe { buddy_frame.as_ref() }.is_alloc {
-                        continue;
-                    }
-
-                    self.frame_lists[order].detach_node(buddy_frame);
-
-                    // Select frame which has smaller address.
-                    if buddy_frame.as_ptr() < merged_frame.as_ptr() {
-                        merged_frame = buddy_frame;
-                    }
-                    unsafe {
-                        merged_frame.as_mut().order = order + 1;
-                        merged_frame.as_mut().is_alloc = false;
-                    };
-                }
-                _ => {
+        for i in order..MAX_ORDER {
+            if let Some(mut buddy_obj) = self.buddy(obj, i) {
+                if unsafe { buddy_obj.as_ref().is_used() } {
                     break;
                 }
+                // Merge the two object into one large object.
+
+                // Take out the free buddy object.
+                self.free_lists[i].detach(buddy_obj);
+                self.free_counts[i] -= 1;
+                let buddy_obj = Unique::from(buddy_obj);
+
+                // Select object which has smaller address.
+                if buddy_obj.as_ptr() < obj.as_ptr() {
+                    obj = buddy_obj;
+                }
+
+                unsafe {
+                    let obj = obj.as_mut();
+                    obj.mark_free();
+                    obj.set_order(i + 1)
+                };
+            } else {
+                break;
             }
         }
 
-        let order = unsafe { merged_frame.as_ref().order };
-        println!("free - {:?}", order);
-        self.frame_lists[order].push_tail(merged_frame);
+        let order = unsafe { obj.as_ref().order() };
+        self.free_lists[order].push_tail(obj);
+        self.free_counts[order] += 1;
     }
 
-    fn free_frame_count(&self) -> usize {
-        self.frame_lists
+    pub fn count_free_objs(&self) -> usize {
+        self.free_counts
             .iter()
             .enumerate()
-            .fold(0, |acc, (order, frame_list)| {
-                acc + (frame_list.length() * (1 << order))
-            })
+            .fold(0, |acc, (order, count)| acc + count * (1 << order))
     }
 }
 
+#[cfg(test)]
+#[macro_use]
+extern crate std;
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::heap::{Alloc, Layout, System};
-    use std::mem;
+    use self::std::heap::{Alloc, Layout, System};
+    use self::std::mem;
+
+    struct Frame {
+        next: Option<NonNull<Frame>>,
+        prev: Option<NonNull<Frame>>,
+        order: usize,
+        is_used: bool,
+    }
+
+    impl Node<Frame> for Frame {
+        fn set_next(&mut self, ptr: Option<NonNull<Self>>) {
+            self.next = ptr;
+        }
+
+        fn set_prev(&mut self, ptr: Option<NonNull<Self>>) {
+            self.prev = ptr;
+        }
+
+        fn next(&self) -> Option<NonNull<Self>> {
+            self.next
+        }
+
+        fn prev(&self) -> Option<NonNull<Self>> {
+            self.prev
+        }
+    }
+
+    impl BuddyObject for Frame {
+        fn mark_used(&mut self) {
+            self.is_used = true;
+        }
+
+        fn mark_free(&mut self) {
+            self.is_used = false;
+        }
+
+        fn is_used(&self) -> bool {
+            self.is_used
+        }
+
+        fn order(&self) -> usize {
+            self.order
+        }
+
+        fn set_order(&mut self, order: usize) {
+            self.order = order;
+        }
+    }
 
     fn allocate_nodes<T>(count: usize) -> *mut T {
         let type_size = mem::size_of::<T>();
-        let align = mem::align_of::<T>();
-        let layout = Layout::from_size_align(count * type_size, align).unwrap();
+        let align     = mem::align_of::<T>();
+        let layout    = Layout::from_size_align(count * type_size, align).unwrap();
         let ptr = unsafe { System.alloc(layout) }.unwrap();
 
-        ptr as _
+        ptr.as_ptr() as *mut _
     }
 
     #[test]
-    fn test_buddy_manager() {
-        // 1,2,4,8,16,32,64
-        static SIZE: usize = 1024 + (1 + 8);
-        let frames: *mut Frame = allocate_nodes(SIZE);
+    fn test_allocate_and_free() {
+        const SIZE: usize = 32;
+        let nodes = allocate_nodes(SIZE);
+        let nodes = unsafe { Unique::new_unchecked(nodes) };
+        let mut allocator: BuddyAllocator<Frame> = BuddyAllocator::new(nodes, SIZE);
 
-        let mut bman = BuddyManager::new(frames, SIZE);
-        assert_eq!(bman.frame_lists[10].length(), 1);
-        assert_eq!(bman.frame_lists[3].length(), 1);
-        assert_eq!(bman.frame_lists[0].length(), 1);
-        assert_eq!(bman.free_frame_count(), SIZE);
+        assert_eq!(SIZE, allocator.count_free_objs());
 
-        let frame1 = bman.alloc(0);
-        assert_eq!(frame1.is_some(), true);
-        assert_eq!(bman.frame_lists[0].length(), 0);
-        assert_eq!(bman.free_frame_count(), SIZE - 1);
+        if let Some(obj) = allocator.allocate(2) {
+            assert_eq!(2, unsafe {obj.as_ref().order()});
 
-        let frame2 = bman.alloc(0);
-        assert_eq!(frame2.is_some(), true);
-        assert_eq!(bman.frame_lists[0].length(), 1);
-        assert_eq!(bman.frame_lists[1].length(), 1);
-        assert_eq!(bman.frame_lists[2].length(), 1);
-        assert_eq!(bman.free_frame_count(), SIZE - 2);
+            assert_eq!(SIZE - 4, allocator.count_free_objs());
 
-        bman.free(frame1.unwrap());
-        assert_eq!(bman.free_frame_count(), SIZE - 1);
+            allocator.free(obj);
+            assert_eq!(SIZE, allocator.count_free_objs());
+        }
+    }
 
-        bman.free(frame2.unwrap());
-        assert_eq!(bman.frame_lists[10].length(), 1);
-        assert_eq!(bman.frame_lists[3].length(), 1);
-        assert_eq!(bman.frame_lists[0].length(), 1);
-        assert_eq!(bman.free_frame_count(), SIZE);
 
-        let frame1 = bman.alloc(100);
-        assert_eq!(frame1.is_none(), true);
+    #[test]
+    fn test_try_to_allocate_all() {
+        const SIZE: usize = 32;
+        let nodes = allocate_nodes(SIZE);
+        let nodes = unsafe { Unique::new_unchecked(nodes) };
+        let mut allocator: BuddyAllocator<Frame> = BuddyAllocator::new(nodes, SIZE);
 
-        let frame1 = bman.alloc(1);
-        assert_eq!(frame1.is_some(), true);
+        let mut list = LinkedList::new();
+
+        // Allocate the all objects.
+        loop {
+            if let Some(obj) = allocator.allocate(0) {
+                assert_eq!(0, unsafe {obj.as_ref().order()});
+                list.push_tail(obj);
+            } else {
+                break
+            }
+        }
+
+        assert_eq!(0, allocator.count_free_objs());
+        assert_eq!(SIZE, list.count());
+
+        // Deallocate the all objects.
+        loop {
+            if let Some(obj) = list.pop_head() {
+                allocator.free(obj);
+            } else {
+                break
+            }
+        }
+
+        assert_eq!(SIZE, allocator.count_free_objs());
+        assert_eq!(0, list.count());
     }
 }

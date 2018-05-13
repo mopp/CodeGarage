@@ -1,0 +1,6 @@
+*.asm
+*.o
+parse_*
+print_*
+read_*
+string_*

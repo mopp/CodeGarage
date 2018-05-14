@@ -55,6 +55,33 @@ print_newline:
     xor rax, rax
     ret
 
+
+; rdi points to a string
+; returns rax: number, rdx : length
+parse_int:
+    mov al, [rdi]
+    cmp al, '-'
+    je .negetive
+
+    call parse_uint
+    ret
+
+.negetive:
+    inc rdi
+    call parse_uint
+
+    test rdx, rdx
+    jz .tmp
+
+    imul rax, rax, -1
+    inc rdx
+    ret
+
+.tmp:
+    xor rax, rax
+    ret
+
+
 ; Print the given 8-bytes signed integer as decimal.
 ; rdi - signed integer.
 print_int:
@@ -199,18 +226,25 @@ parse_uint:
     jmp .loop0
 
 .end_count:
+    cmp rdi, rsi
+    je .none
+
     div r8
+
     mov r9, rax
+
     mov rcx, rdi
     sub rcx, rsi
+
     xor r10, r10
 .loop1:
-    dec rdi
 
     ; Parse number.
     xor rax, rax
-    mov al, [rdi]
+    mov al, [rsi]
     sub al, 0x30
+
+    inc rsi
 
     mul r9
     add r10, rax
@@ -225,12 +259,8 @@ parse_uint:
     mov rax, r10
     mov rdx, rcx
     ret
-
-
-; rdi points to a string
-; returns rax: number, rdx : length
-parse_int:
-    xor rax, rax
+.none:
+    xor rdx, rdx
     ret
 
 ; Copy N characters from source to destination.

@@ -148,9 +148,6 @@ read_word:
     pop rdi
     xor rdx, rdx
 
-    test rax, rax
-    jz .none
-
 .loop:
     cmp rdx, rsi
     je .too_long
@@ -179,15 +176,56 @@ read_word:
 .too_long:
     xor rax, rax
     xor rdx, rdx
-.none:
     ret
 
 
 ; rdi points to a string
 ; returns rax: number, rdx : length
 parse_uint:
+    mov rsi, rdi
+    ; Count numbers in the string.
+    xor rdx, rdx
+    mov r8, 10 ; Base number.
+    mov rax, 1
+.loop0:
+    mov r9b, [rdi]
+    cmp r9b, 0x30
+    jl .end_count
+    cmp r9b, 0x39
+    jg .end_count
+
+    mul r8
+    inc rdi
+    jmp .loop0
+
+.end_count:
+    div r8
+    mov r9, rax
+    mov rcx, rdi
+    sub rcx, rsi
+    xor r10, r10
+.loop1:
+    dec rdi
+
+    ; Parse number.
     xor rax, rax
+    mov al, [rdi]
+    sub al, 0x30
+
+    mul r9
+    add r10, rax
+
+    xchg r9, rax
+    div r8
+    xchg r9, rax
+
+    cmp rdi, rsi
+    jne .loop1
+
+    mov rax, r10
+    mov rdx, rcx
     ret
+
 
 ; rdi points to a string
 ; returns rax: number, rdx : length

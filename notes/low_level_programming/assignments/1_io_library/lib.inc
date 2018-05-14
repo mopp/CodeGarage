@@ -209,49 +209,48 @@ read_word:
 ; rdi points to a string
 ; returns rax: number, rdx : length
 parse_uint:
-    mov rsi, rdi
-    ; Count numbers in the string.
     xor rdx, rdx
-    mov r8, 10 ; Base number.
-    mov rax, 1
+    mov rsi, rdi
+
+    ; Find the tail.
 .loop0:
+    ; break if (r9b < 0x30 || 0x39 < r9b)
     mov r9b, [rdi]
     cmp r9b, 0x30
-    jl .end_count
+    jl .break
     cmp r9b, 0x39
-    jg .end_count
+    jg .break
 
-    mul r8
     inc rdi
     jmp .loop0
 
-.end_count:
+.break:
     cmp rdi, rsi
     je .none
 
-    div r8
-
-    mov r9, rax
-
+    ; Keep the length.
     mov rcx, rdi
     sub rcx, rsi
 
+    mov rax, 1
+    mov r8, 10
     xor r10, r10
 .loop1:
+    dec rdi
 
     ; Parse number.
-    xor rax, rax
-    mov al, [rsi]
-    sub al, 0x30
+    xor r9, r9
+    mov r9b, [rdi]
+    sub r9b, 0x30
 
-    inc rsi
+    xchg rax, r9
 
     mul r9
     add r10, rax
 
-    xchg r9, rax
-    div r8
-    xchg r9, rax
+    xchg rax, r9
+
+    mul r8
 
     cmp rdi, rsi
     jne .loop1
@@ -260,7 +259,6 @@ parse_uint:
     mov rdx, rcx
     ret
 .none:
-    xor rdx, rdx
     ret
 
 ; Copy N characters from source to destination.

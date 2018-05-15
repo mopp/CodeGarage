@@ -128,9 +128,30 @@ print_uint:
     xor rax, rax
     ret
 
+; Compare the two given string.
+; rdi - pointer to a string.
+; rsi - pointer to a string.
 string_equals:
+.loop:
+    mov al, [rdi]
+    mov ah, [rsi]
+
+    cmp ax, 0x0000
+    je .equal
+    cmp ax, 0x0404
+    je .equal
+
+    inc rdi
+    inc rsi
+    cmp al, ah
+    je .loop
+
     xor rax, rax
     ret
+.equal:
+    mov rax, 1
+    ret
+
 
 ; Read a character from STDIN.
 ; rax - a character

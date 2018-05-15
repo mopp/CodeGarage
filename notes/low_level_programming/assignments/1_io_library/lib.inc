@@ -4,20 +4,22 @@ section .text
 %define STDIN 0
 %define STDOUT 1
 
+
 ; Count the length of the given string.
 ; rdi - a pointer to string.
 ; eax - the count of the string.
 string_length:
-    xor rax, rax
+    mov rax, rdi
+
 .loop:
-    cmp byte [rdi], 0
+    cmp byte [rax], 0
     je .end
 
-    inc rdi
-    inc eax
+    inc rax
     jmp .loop
 
 .end:
+    sub rax, rdi
     ret
 
 
@@ -35,6 +37,11 @@ print_string:
     ret
 
 
+; Print newline.
+print_newline:
+    mov rdi, 0x10
+
+
 ; Print a given character.
 ; rdi - a character.
 print_char:
@@ -48,10 +55,6 @@ print_char:
 
     pop rdi
 
-    xor rax, rax
-    ret
-
-print_newline:
     xor rax, rax
     ret
 
@@ -73,7 +76,7 @@ parse_int:
     test rdx, rdx
     jz .tmp
 
-    imul rax, rax, -1
+    neg rax
     inc rdx
     ret
 
@@ -92,7 +95,7 @@ print_int:
     mov rdi, '-'
     call print_char
     pop rdi
-    imul rdi, rdi, -1
+    neg rdi
 
 ; Print the given 8-bytes unsigned integer as decimal.
 ; rdi - unsigned integer.
@@ -132,7 +135,6 @@ print_uint:
 ; rdi - pointer to a string.
 ; rsi - pointer to a string.
 string_equals:
-.loop:
     mov al, [rdi]
     mov ah, [rsi]
 
@@ -140,11 +142,8 @@ string_equals:
     je .equal
     cmp ax, 0x0404
     je .equal
-
-    inc rdi
-    inc rsi
-    cmp al, ah
-    je .loop
+    cmpsb
+    je string_equals
 
     xor rax, rax
     ret

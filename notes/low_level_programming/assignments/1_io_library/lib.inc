@@ -39,7 +39,7 @@ print_string:
 
 ; Print newline.
 print_newline:
-    mov rdi, 0x10
+    mov rdi, 0x0A
 
 
 ; Print a given character.

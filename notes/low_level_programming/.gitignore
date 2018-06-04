@@ -6,5 +6,6 @@
 070.o
 070_pr
 070_pr.o
+075
 a.out
 syscall

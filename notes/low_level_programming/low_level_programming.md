@@ -471,3 +471,153 @@
 
 # Q70
 - 070.nas
+
+
+# Q71
+- ldが警告を出すのはなぜか
+    + エントリポイントのアドレスがglobalの有無にかかわらず、`readelf -e`で見ると0x4000b0だった
+        + global無し
+        > 8: 00000000004000b0     0 NOTYPE  LOCAL  DEFAULT    1 _start
+        + global有り
+        > 8: 00000000004000b4     0 NOTYPE  LOCAL  DEFAULT    1 _start.loop
+
+
+# Q72
+- ldにシンボルテーブルを自動でstripするオプションはあるか
+    > -s, --strip-all             Strip all symbols
+    > -S, --strip-debug           Strip debugging symbols
+
+
+# Q73
+- `readelf --dyn=syms`と`objdump -ft`でシンボルテーブルを調べる
+   + `readelf --dyn=syms`
+        ```
+        Symbol table '.dynsym' contains 5 entries:
+           Num:    Value          Size Type    Bind   Vis      Ndx Name
+             0: 0000000000000000     0 NOTYPE  LOCAL  DEFAULT  UND 
+             1: 0000000000201018     0 NOTYPE  GLOBAL DEFAULT   10 _edata
+             2: 0000000000201018     0 NOTYPE  GLOBAL DEFAULT   10 _end
+             3: 0000000000201018     0 NOTYPE  GLOBAL DEFAULT   10 __bss_start
+             4: 0000000000000230     0 FUNC    GLOBAL DEFAULT    6 func
+        ```
+   + `objdump -ft`
+        ```
+        ./libso.so:     file format elf64-x86-64
+        architecture: i386:x86-64, flags 0x00000150:
+        HAS_SYMS, DYNAMIC, D_PAGED
+        start address 0x0000000000000230
+
+        SYMBOL TABLE:
+        0000000000000120 l    d  .hash	0000000000000000 .hash
+        0000000000000148 l    d  .gnu.hash	0000000000000000 .gnu.hash
+        0000000000000180 l    d  .dynsym	0000000000000000 .dynsym
+        00000000000001f8 l    d  .dynstr	0000000000000000 .dynstr
+        0000000000000218 l    d  .rela.dyn	0000000000000000 .rela.dyn
+        0000000000000230 l    d  .text	0000000000000000 .text
+        000000000000024c l    d  .rodata	0000000000000000 .rodata
+        0000000000000268 l    d  .eh_frame	0000000000000000 .eh_frame
+        0000000000200f00 l    d  .dynamic	0000000000000000 .dynamic
+        0000000000201000 l    d  .got.plt	0000000000000000 .got.plt
+        0000000000000000 l    df *ABS*	0000000000000000 libso.asm
+        000000000000024c l       .rodata	0000000000000000 message
+        0000000000000000 l    df *ABS*	0000000000000000 
+        0000000000200f00 l     O .dynamic	0000000000000000 _DYNAMIC
+        0000000000201000 l     O .got.plt	0000000000000000 _GLOBAL_OFFSET_TABLE_
+        0000000000201018 g       .got.plt	0000000000000000 __bss_start
+        0000000000000230 g     F .text	0000000000000000 func
+        0000000000201018 g       .got.plt	0000000000000000 _edata
+        0000000000201018 g       .got.plt	0000000000000000 _end
+        ```
+    + funcがグローバルになっているのがわかる
+
+# Q74
+- LD_LIBRARY_PATHの意味
+    + 共有ライブラリの検索パス
+
+# Q75
+- 入出力ライブラリを2つのモジュールに分割する
+    + includeで取り込み実装するのではなく、objectでリンク可能にした
+        * lib.incにglobalを追加
+        * 仕様側でexternを書く
+
+# Q76
+- lsを見てみる
+    + `objdump -ft`
+       ```
+        /usr/bin/ls:     file format elf64-x86-64
+        architecture: i386:x86-64, flags 0x00000150:
+        HAS_SYMS, DYNAMIC, D_PAGED
+        start address 0x0000000000005000
+
+        SYMBOL TABLE:
+        no symbols
+       ```
+        * `EXEC_P`が無いが実行できる
+            - `readelf -l`で見たところelfファイルタイプはDYN(Shared object file)だった
+    + `readelf -S`
+        ```
+        There are 25 section headers, starting at offset 0x20390:
+
+        Section Headers:
+          [Nr] Name              Type             Address           Offset
+               Size              EntSize          Flags  Link  Info  Align
+          [ 0]                   NULL             0000000000000000  00000000
+               0000000000000000  0000000000000000           0     0     0
+          [ 1] .interp           PROGBITS         0000000000000238  00000238
+               000000000000001c  0000000000000000   A       0     0     1
+          [ 2] .note.ABI-tag     NOTE             0000000000000254  00000254
+               0000000000000020  0000000000000000   A       0     0     4
+          [ 3] .note.gnu.build-i NOTE             0000000000000274  00000274
+               0000000000000024  0000000000000000   A       0     0     4
+          [ 4] .gnu.hash         GNU_HASH         0000000000000298  00000298
+               00000000000000f4  0000000000000000   A       5     0     8
+          [ 5] .dynsym           DYNSYM           0000000000000390  00000390
+               0000000000000cf0  0000000000000018   A       6     1     8
+          [ 6] .dynstr           STRTAB           0000000000001080  00001080
+               00000000000005e8  0000000000000000   A       0     0     1
+          [ 7] .gnu.version      VERSYM           0000000000001668  00001668
+               0000000000000114  0000000000000002   A       5     0     2
+          [ 8] .gnu.version_r    VERNEED          0000000000001780  00001780
+               0000000000000070  0000000000000000   A       6     1     8
+          [ 9] .rela.dyn         RELA             00000000000017f0  000017f0
+               0000000000001db8  0000000000000018   A       5     0     8
+          [10] .init             PROGBITS         00000000000035a8  000035a8
+               0000000000000017  0000000000000000  AX       0     0     4
+          [11] .text             PROGBITS         00000000000035c0  000035c0
+               0000000000012839  0000000000000000  AX       0     0     16
+          [12] .fini             PROGBITS         0000000000015dfc  00015dfc
+               0000000000000009  0000000000000000  AX       0     0     4
+          [13] .rodata           PROGBITS         0000000000015e20  00015e20
+               0000000000004dec  0000000000000000   A       0     0     32
+          [14] .eh_frame_hdr     PROGBITS         000000000001ac0c  0001ac0c
+               000000000000084c  0000000000000000   A       0     0     4
+          [15] .eh_frame         PROGBITS         000000000001b458  0001b458
+               0000000000002bf8  0000000000000000   A       0     0     8
+          [16] .init_array       INIT_ARRAY       000000000021f030  0001f030
+               0000000000000008  0000000000000008  WA       0     0     8
+          [17] .fini_array       FINI_ARRAY       000000000021f038  0001f038
+               0000000000000008  0000000000000008  WA       0     0     8
+          [18] .data.rel.ro      PROGBITS         000000000021f040  0001f040
+               0000000000000a38  0000000000000000  WA       0     0     32
+          [19] .dynamic          DYNAMIC          000000000021fa78  0001fa78
+               00000000000001c0  0000000000000010  WA       6     0     8
+          [20] .got              PROGBITS         000000000021fc38  0001fc38
+               00000000000003c8  0000000000000008  WA       0     0     8
+          [21] .data             PROGBITS         0000000000220000  00020000
+               0000000000000268  0000000000000000  WA       0     0     32
+          [22] .bss              NOBITS           0000000000220280  00020268
+               00000000000012e0  0000000000000000  WA       0     0     32
+          [23] .comment          PROGBITS         0000000000000000  00020268
+               0000000000000034  0000000000000001  MS       0     0     1
+          [24] .shstrtab         STRTAB           0000000000000000  0002029c
+               00000000000000ed  0000000000000000           0     0     1
+        Key to Flags:
+          W (write), A (alloc), X (execute), M (merge), S (strings), I (info),
+          L (link order), O (extra OS processing required), G (group), T (TLS),
+          C (compressed), x (unknown), o (OS specific), E (exclude),
+          l (large), p (processor specific)
+        ```
+        * init_arrayが見慣れないので調べたが、関数アドレスのテーブルのようだった
+            * コンストラクタのアドレスなどが配置され、実行時リンカ(ローダ？)によって実行されるらしい
+            * [初期設定および終了ルーチン (リンカーとライブラリ)](https://docs.oracle.com/cd/E19683-01/817-3496/6mj39o7ia/index.html)
+            * .fini_arrayがデストラクタに相当するはず

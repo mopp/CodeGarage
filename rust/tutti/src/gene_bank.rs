@@ -1,8 +1,7 @@
 use instruction::Instruction;
 use std::collections::HashMap;
-use std::fmt;
 use std::collections::HashSet;
-
+use std::fmt;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 struct GenomeRecord {
@@ -11,23 +10,19 @@ struct GenomeRecord {
     mother_info: Option<Box<GenomeRecord>>,
 }
 
-
 impl fmt::Display for GenomeRecord {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}-{:x}", self.genome.len(), self.genome_type)
     }
 }
 
-
 impl GenomeRecord {
-    fn new(genome: Vec<Instruction>, mother: Option<Box<GenomeRecord>>) -> GenomeRecord
-    {
-        let t =
-            if let Some(m) = mother.as_ref() {
-                m.genome_type + 1
-            } else {
-                0
-            };
+    fn new(genome: Vec<Instruction>, mother: Option<Box<GenomeRecord>>) -> GenomeRecord {
+        let t = if let Some(m) = mother.as_ref() {
+            m.genome_type + 1
+        } else {
+            0
+        };
 
         GenomeRecord {
             genome: genome,
@@ -37,13 +32,11 @@ impl GenomeRecord {
     }
 }
 
-
 pub struct GeneBank {
     records: Vec<GenomeRecord>,
     alive_count_map: HashMap<String, usize>,
     dead_count_map: HashMap<String, usize>,
 }
-
 
 impl fmt::Display for GeneBank {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -51,8 +44,10 @@ impl fmt::Display for GeneBank {
         for i in self.records.iter() {
             let key = i.to_string();
             match self.alive_count_map.get(&key) {
-                Some(c) if *c != 0 => { keys.insert(key); },
-                _                  => { },
+                Some(c) if *c != 0 => {
+                    keys.insert(key);
+                }
+                _ => {}
             }
         }
 
@@ -65,14 +60,15 @@ impl fmt::Display for GeneBank {
             .map(|key| {
                 let key = key.to_string();
                 let default_value = 0;
-                let alive_count   = self.alive_count_map.get(&key).unwrap_or(&default_value);
-                let dead_count    = self.dead_count_map.get(&key).unwrap_or(&default_value);
+                let alive_count = self.alive_count_map.get(&key).unwrap_or(&default_value);
+                let dead_count = self.dead_count_map.get(&key).unwrap_or(&default_value);
                 [
                     format!("GenoType: {}", key),
                     format!("  # of borns : {:>}", alive_count + dead_count),
                     format!("  # of alives: {:>}", alive_count),
                     format!("  # of deads : {:>}", dead_count),
-                ].join("\n")
+                ]
+                .join("\n")
             })
             .collect::<Vec<String>>()
             .join("\n");
@@ -81,10 +77,8 @@ impl fmt::Display for GeneBank {
     }
 }
 
-
 impl GeneBank {
-    pub fn new() -> GeneBank
-    {
+    pub fn new() -> GeneBank {
         GeneBank {
             records: Vec::new(),
             alive_count_map: HashMap::new(),
@@ -92,8 +86,11 @@ impl GeneBank {
         }
     }
 
-    pub fn register_genome(&mut self, genome: &Vec<Instruction>, mother: Option<&String>) -> Option<String>
-    {
+    pub fn register_genome(
+        &mut self,
+        genome: &Vec<Instruction>,
+        mother: Option<&String>,
+    ) -> Option<String> {
         let genome = (*genome).clone();
         if mother.is_none() && self.find_genome_record(&genome).is_none() {
             let r = GenomeRecord::new(genome, None);
@@ -103,47 +100,38 @@ impl GeneBank {
             return Some(tag);
         }
 
-        match (self.find_genome_record(&genome), self.find_genome_record_by_type(mother)) {
+        match (
+            self.find_genome_record(&genome),
+            self.find_genome_record_by_type(mother),
+        ) {
             (None, Some(mother)) => {
                 let r = GenomeRecord::new(genome, Some(Box::new(mother)));
                 let tag = r.to_string();
                 self.records.push(r);
                 Some(tag)
-            },
-            (Some(index), _) => {
-                Some(self.records[index].to_string())
             }
+            (Some(index), _) => Some(self.records[index].to_string()),
             (None, None) => panic!("None, None - {:?}", mother),
         }
     }
 
-    fn find_genome_record(&self, target: &Vec<Instruction>) -> Option<usize>
-    {
-        self.records
-            .iter()
-            .position(|r| r.genome == *target)
+    fn find_genome_record(&self, target: &Vec<Instruction>) -> Option<usize> {
+        self.records.iter().position(|r| r.genome == *target)
     }
 
-    fn find_genome_record_by_type(&self, target: Option<&String>) -> Option<GenomeRecord>
-    {
+    fn find_genome_record_by_type(&self, target: Option<&String>) -> Option<GenomeRecord> {
         target
-            .and_then(|t| {
-                self.records
-                    .iter()
-                    .find(|x| x.to_string() == *t)
-            })
+            .and_then(|t| self.records.iter().find(|x| x.to_string() == *t))
             .and_then(|x| Some(x.clone()))
     }
 
-    pub fn count_up_alive_genome(&mut self, geno_type: &String)
-    {
+    pub fn count_up_alive_genome(&mut self, geno_type: &String) {
         let key = (*geno_type).clone();
         let count = self.alive_count_map.remove(&key).unwrap_or(0);
         self.alive_count_map.insert(key, count + 1);
     }
 
-    pub fn count_up_dead_genome(&mut self, geno_type: &String)
-    {
+    pub fn count_up_dead_genome(&mut self, geno_type: &String) {
         let key = (*geno_type).clone();
         let count = self.dead_count_map.remove(&key).unwrap_or(0);
         self.dead_count_map.insert(key.clone(), count + 1);
@@ -155,10 +143,9 @@ impl GeneBank {
         }
     }
 
-    pub fn dump_all_recorded_genoms(&self) -> String
-    {
-        let mut keys =
-            self.records
+    pub fn dump_all_recorded_genoms(&self) -> String {
+        let mut keys = self
+            .records
             .iter()
             .fold(HashSet::new(), |mut acc, ref x| {
                 acc.insert(x.to_string());
@@ -168,20 +155,27 @@ impl GeneBank {
             .collect::<Vec<String>>();
         keys.sort();
 
-        keys
-            .into_iter()
+        keys.into_iter()
             .map(|key| {
                 let r = self.find_genome_record_by_type(Some(&key)).unwrap();
                 let default_value = 0;
-                let alive_count   = self.alive_count_map.get(&key).unwrap_or(&default_value);
-                let dead_count    = self.dead_count_map.get(&key).unwrap_or(&default_value);
+                let alive_count = self.alive_count_map.get(&key).unwrap_or(&default_value);
+                let dead_count = self.dead_count_map.get(&key).unwrap_or(&default_value);
                 [
                     format!("GenoType: {}", key),
                     format!("  # of borns : {:>}", alive_count + dead_count),
                     format!("  # of alives: {:>}", alive_count),
                     format!("  # of deads : {:>}", dead_count),
-                    format!("  Genome     : [{}]", r.genome.iter().map(|&x| format!("{:?}", x)).collect::<Vec<String>>().join(", ")),
-                ].join("\n")
+                    format!(
+                        "  Genome     : [{}]",
+                        r.genome
+                            .iter()
+                            .map(|&x| format!("{:?}", x))
+                            .collect::<Vec<String>>()
+                            .join(", ")
+                    ),
+                ]
+                .join("\n")
             })
             .collect::<Vec<String>>()
             .join("\n\n")

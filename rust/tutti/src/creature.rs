@@ -15,13 +15,11 @@ pub struct Creature {
     pub geno_type: Option<String>,
 }
 
-
 impl Ord for Creature {
     fn cmp(&self, other: &Creature) -> Ordering {
         self.core.count_fails.cmp(&other.core.count_fails)
     }
 }
-
 
 impl PartialOrd for Creature {
     fn partial_cmp(&self, other: &Creature) -> Option<Ordering> {
@@ -29,11 +27,8 @@ impl PartialOrd for Creature {
     }
 }
 
-
-
 impl Creature {
-    pub fn new(g: MemoryRegion) -> Creature
-    {
+    pub fn new(g: MemoryRegion) -> Creature {
         let mut core = Cpu::new();
         core.ip = g.addr as u16;
         Creature {
@@ -46,9 +41,7 @@ impl Creature {
         }
     }
 
-    pub fn randomize_mutate_threshold_copy_fail(&mut self)
-    {
+    pub fn randomize_mutate_threshold_copy_fail(&mut self) {
         self.mutate_threshold_copy_fail = rand::thread_rng().gen_range(1000, 2500);
     }
 }
-

@@ -1,8 +1,8 @@
 #[macro_use]
 extern crate chan;
 extern crate chan_signal;
-extern crate rand;
 extern crate chrono;
+extern crate rand;
 
 mod cpu;
 mod creature;
@@ -12,14 +12,13 @@ mod memory_region;
 mod universe;
 
 use chan_signal::Signal;
+use chrono::Local;
+use gene_bank::GeneBank;
 use instruction::Instruction;
 use std::fs::File;
 use std::io::prelude::*;
 use std::thread;
 use universe::Universe;
-use chrono::Local;
-use gene_bank::GeneBank;
-
 
 fn main() {
     let mut univ = Universe::new();
@@ -34,87 +33,13 @@ fn main() {
     use Instruction::*;
 
     let insts = [
-        Nop1,
-        Nop1,
-        Nop1,
-        Nop1,
-        Zero,
-        Or1,
-        Shl,
-        Shl,
-        MovCd,
-        Adrb,
-        Nop0,
-        Nop0,
-        Nop0,
-        Nop0,
-        SubAc,
-        MovAb,
-        Adrf,
-        Nop0,
-        Nop0,
-        Nop0,
-        Nop1,
-        IncA,
-        SubAb,
-        Nop1,
-        Nop1,
-        Nop0,
-        Nop1,
-        Mal,
-        Call,
-        Nop0,
-        Nop0,
-        Nop1,
-        Nop1,
-        Divide,
-        Jmpb,
-        Nop0,
-        Nop0,
-        Nop1,
-        Nop0,
-        IfCz,
-        Nop1,
-        Nop1,
-        Nop0,
-        Nop0,
-        PushAx,
-        PushBx,
-        PushCx,
-        Nop1,
-        Nop0,
-        Nop1,
-        Nop0,
-        MovIab,
-        DecC,
-        IfCz,
-        Jmp,
-        Nop0,
-        Nop1,
-        Nop0,
-        Nop0,
-        IncA,
-        IncB,
-        Jmpb,
-        Nop0,
-        Nop1,
-        Nop0,
-        Nop1,
-        IfCz,
-        Nop1,
-        Nop0,
-        Nop1,
-        Nop1,
-        PopCx,
-        PopBx,
-        PopAx,
-        Ret,
-        Nop1,
-        Nop1,
-        Nop1,
-        Nop0,
-        IfCz,
-        ];
+        Nop1, Nop1, Nop1, Nop1, Zero, Or1, Shl, Shl, MovCd, Adrb, Nop0, Nop0, Nop0, Nop0, SubAc,
+        MovAb, Adrf, Nop0, Nop0, Nop0, Nop1, IncA, SubAb, Nop1, Nop1, Nop0, Nop1, Mal, Call, Nop0,
+        Nop0, Nop1, Nop1, Divide, Jmpb, Nop0, Nop0, Nop1, Nop0, IfCz, Nop1, Nop1, Nop0, Nop0,
+        PushAx, PushBx, PushCx, Nop1, Nop0, Nop1, Nop0, MovIab, DecC, IfCz, Jmp, Nop0, Nop1, Nop0,
+        Nop0, IncA, IncB, Jmpb, Nop0, Nop1, Nop0, Nop1, IfCz, Nop1, Nop0, Nop1, Nop1, PopCx, PopBx,
+        PopAx, Ret, Nop1, Nop1, Nop1, Nop0, IfCz,
+    ];
     univ.generate_creature(&insts);
 
     univ.enable_random_mutate();
@@ -124,13 +49,25 @@ fn main() {
         univ.wakeup_reaper_if_genome_usage_over(0.8);
 
         println!("==========");
-        println!("Genome used size: {}", universe::UNIVERSE_TOTAL_GENOME_CAPACITY - univ.compute_genome_soup_free_size());
+        println!(
+            "Genome used size: {}",
+            universe::UNIVERSE_TOTAL_GENOME_CAPACITY - univ.compute_genome_soup_free_size()
+        );
         println!("Genome free size: {}", univ.compute_genome_soup_free_size());
 
-        assert_eq!(universe::UNIVERSE_TOTAL_GENOME_CAPACITY, univ.compute_genome_soup_free_size() + univ.compute_genome_soup_used_size());
+        assert_eq!(
+            universe::UNIVERSE_TOTAL_GENOME_CAPACITY,
+            univ.compute_genome_soup_free_size() + univ.compute_genome_soup_used_size()
+        );
 
-        println!("Genome usage rate: {}", univ.compute_genome_soup_used_rate());
-        println!("Genome free rate:  {}", univ.compute_genome_soup_free_rate());
+        println!(
+            "Genome usage rate: {}",
+            univ.compute_genome_soup_used_rate()
+        );
+        println!(
+            "Genome free rate:  {}",
+            univ.compute_genome_soup_free_rate()
+        );
         println!("# of creatures: {}", univ.count_creatures());
         println!("Bank Info\n{}", univ.gene_bank());
         println!("# of free regions {:?}", univ.free_regions.len());
@@ -143,7 +80,8 @@ fn main() {
 
         let dump_to_file = |filename: &String, bank: &GeneBank| {
             let mut file = File::create(filename).unwrap();
-            file.write_fmt(format_args!("{}", bank.dump_all_recorded_genoms())).unwrap();
+            file.write_fmt(format_args!("{}", bank.dump_all_recorded_genoms()))
+                .unwrap();
         };
 
         chan_select! {
@@ -163,6 +101,4 @@ fn main() {
     }
 }
 
-fn run(_sdone: chan::Sender<()>)
-{
-}
+fn run(_sdone: chan::Sender<()>) {}

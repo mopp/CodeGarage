@@ -75,8 +75,7 @@ impl Universe {
     }
 
     fn allocate_genome_soup(&mut self, request_size: usize) -> Option<MemoryRegion> {
-        // debug_assert!(request_size != 0);
-        if request_size == 0 {
+        if request_size <= 20 {
             return None;
         }
 
@@ -85,25 +84,21 @@ impl Universe {
             .iter()
             .position(|x| request_size <= x.size);
 
-        match index {
-            None => None,
-            Some(index) => {
-                let r = {
-                    let v = self.free_regions.get_mut(index).unwrap();
+        if let Some(index) = index {
+            let v = self.free_regions[index];
+            if v.size == request_size {
+                self.free_regions.remove(index);
+                Some(MemoryRegion::new(v.addr, request_size))
+            } else {
+                let v = self.free_regions.get_mut(index).unwrap();
+                let addr = v.addr;
+                v.addr += request_size;
+                v.size -= request_size;
 
-                    let addr = v.addr;
-                    v.addr += request_size;
-                    v.size -= request_size;
-
-                    Some(MemoryRegion::new(addr, request_size))
-                };
-
-                if self.free_regions[index].size == 0 {
-                    self.free_regions.remove(index);
-                }
-
-                r
+                Some(MemoryRegion::new(addr, request_size))
             }
+        } else {
+            None
         }
     }
 

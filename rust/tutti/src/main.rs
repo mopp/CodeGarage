@@ -48,12 +48,9 @@ fn main() {
         univ.execute_all_creatures(1.2);
         univ.wakeup_reaper_if_genome_usage_over(0.8);
 
-        println!("==========");
-        println!(
-            "Genome used size: {}",
-            universe::UNIVERSE_TOTAL_GENOME_CAPACITY - univ.compute_genome_soup_free_size()
-        );
-        println!("Genome free size: {}", univ.compute_genome_soup_free_size());
+        let free_size = univ.compute_genome_soup_free_size();
+        let used_size = universe::UNIVERSE_TOTAL_GENOME_CAPACITY - free_size;
+        println!("free: {}, used: {}", free_size, used_size);
 
         assert_eq!(
             universe::UNIVERSE_TOTAL_GENOME_CAPACITY,
@@ -61,11 +58,8 @@ fn main() {
         );
 
         println!(
-            "Genome usage rate: {}",
-            univ.compute_genome_soup_used_rate()
-        );
-        println!(
-            "Genome free rate:  {}",
+            "usage rate: {}, free rate: {}",
+            univ.compute_genome_soup_used_rate(),
             univ.compute_genome_soup_free_rate()
         );
         println!("# of creatures: {}", univ.count_creatures());

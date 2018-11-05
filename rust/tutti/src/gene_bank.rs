@@ -62,13 +62,13 @@ impl fmt::Display for GeneBank {
                 let default_value = 0;
                 let alive_count = self.alive_count_map.get(&key).unwrap_or(&default_value);
                 let dead_count = self.dead_count_map.get(&key).unwrap_or(&default_value);
-                [
-                    format!("GenoType: {}", key),
-                    format!("  # of borns : {:>}", alive_count + dead_count),
-                    format!("  # of alives: {:>}", alive_count),
-                    format!("  # of deads : {:>}", dead_count),
-                ]
-                .join("\n")
+                format!(
+                    "GenoType: {}, borns: {}, alives: {}, deads: {}",
+                    key,
+                    alive_count + dead_count,
+                    alive_count,
+                    dead_count
+                )
             })
             .collect::<Vec<String>>()
             .join("\n");
@@ -161,23 +161,20 @@ impl GeneBank {
                 let default_value = 0;
                 let alive_count = self.alive_count_map.get(&key).unwrap_or(&default_value);
                 let dead_count = self.dead_count_map.get(&key).unwrap_or(&default_value);
-                [
-                    format!("GenoType: {}", key),
-                    format!("  # of borns : {:>}", alive_count + dead_count),
-                    format!("  # of alives: {:>}", alive_count),
-                    format!("  # of deads : {:>}", dead_count),
-                    format!(
-                        "  Genome     : [{}]",
-                        r.genome
-                            .iter()
-                            .map(|&x| format!("{:?}", x))
-                            .collect::<Vec<String>>()
-                            .join(", ")
-                    ),
-                ]
-                .join("\n")
+                format!(
+                    "type: {}, borns: {}, alives: {}, deads: {}, genome: [{}]",
+                    key,
+                    alive_count + dead_count,
+                    alive_count,
+                    dead_count,
+                    r.genome
+                        .iter()
+                        .map(|&x| format!("{:?}", x))
+                        .collect::<Vec<String>>()
+                        .join(", ")
+                )
             })
             .collect::<Vec<String>>()
-            .join("\n\n")
+            .join("\n")
     }
 }

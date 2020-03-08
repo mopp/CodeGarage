@@ -14,6 +14,9 @@ class Wombat
   fun hunger(): U64 =>
     _hunger_level
 
+  fun ref set_hunger(to: U64 = 0): U64 =>
+    _hunger_level = to
+
   fun string(): String =>
     "The hunger level of Wombat " + name + " is " + _hunger_level.string()
 
@@ -24,4 +27,7 @@ actor Main
   new create(env: Env) =>
     let defaultWombat = Wombat("Fantastibat") // Invokes the create method by default
     let defaultHawk = Hawk
+    env.out.print(defaultWombat.string())
+
+    defaultWombat.set_hunger(100)
     env.out.print(defaultWombat.string())

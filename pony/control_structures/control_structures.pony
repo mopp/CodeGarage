@@ -39,3 +39,15 @@ actor Main
         "wow"
       end
     env.out.print(b.string())
+
+    var counter = U64(1)
+    let c =
+      repeat
+        env.out.print("hello!")
+        counter = counter + 1
+        // break
+      until counter > 0
+      else
+        false
+      end
+    env.out.print(c.string())
